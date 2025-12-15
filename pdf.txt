@@ -1,0 +1,107 @@
+Introduction to Visual Place Recognition
+Visual Place Recognition (VPR) [3, 6, 16, 19] is the task of recognizing the location where
+an image was taken given only its visual content, i.e. the image itself. It is a building block
+of fundamental importance for applications in autonomous driving, augmented reality, robotics,
+absolute pose estimation, simultaneous localization and mapping, etc. The problem is commonly
+treated as an image retrieval task, where a summary description of an image of interest, called
+a query, is computed and compared against a database of descriptions of images with known
+locations, typically expressed in geographical coordinates.
+To determine the location of the query image, a summary description is computed for both the query
+and the database images. A similarity search is then conducted over the database using a distance
+metric, often implemented with a K-Nearest Neighbors algorithm. This algorithm identifies the K
+most similar images to the query based on their representations. Once the K nearest neighbors
+are retrieved, they contribute to the final location prediction. Typically, the location is predicted
+by selecting the most similar database descriptor, though in some cases, additional aggregation
+techniques may be used to refine the prediction.
+A full Visual Place Recognition pipeline, incorporating the steps outlined above, is shown in Fig. 1.
+This pipeline includes an optional refinement step, which seeks to re-rank the nearest neighbors
+by utilizing local image features. The query and the retrieved images are compared by counting
+the number of inliers, i.e., matched keypoints between the query and a retrieved image that
+survive a geometric post-processing using RANSAC [11]. This step is time-consuming and has high
+computational cost, though it has been used during the years to increase localization performance.
+The figure also highlights the processing time of the descriptors.
+To evaluate and compare the performance of Visual Place Recognition models, the standard metric
+used is Recall@N on a given dataset. For a specified distance threshold τ in meters, the Recall@N
+measures the percentage of queries for which at least one of the top-N (with N ≤ K) retrieved
+database images–determined by the K-Nearest Neighbors algorithm–is within τ meters of the
+ground-truth location of the query. A common value for τ is 25 meters.
+
+Uncertainty Estimation
+A key limitation of current State-Of-The-Art methods in VPR is that they do not provide any
+indication of uncertainty regarding their predictions. This is especially important in safety-critical
+scenarios, such as autonomous driving, where incorrect predictions could have severe consequences,
+including harm to people or environmental damage. In such contexts, providing uncertainty scores–
+quantifying the model’s confidence in its predictions–is essential. These scores allow both
+humans and systems to identify uncertain predictions and avoid making risky decisions.
+
+
+Datasets
+The datasets for this project can be found on Google Drive at the following two links:
+1. GSV-XS, Tokyo-XS, SF-XS
+2. SVOX
+GSV-XS dataset is a small version (XS for eXtra Small) of the GSV-cities dataset [1], created for
+your convenience to adapt to Colab resources. This dataset is used for training.
+
+San Francisco eXtra Small (SF-XS) is a subset of the SF-XL dataset [5]. It is used for validation
+(SF-XS val) and testing (SF-XS test). Note that SF-XS also has a training set, but you will not
+use it in this project, and you can simply ignore it.
+Tokyo eXtra Small (Tokyo-XS) is a subset of the Tokyo 24/7 [25] dataset. This is used only for
+testing.
+SVOX [7] is a dataset which provides a robust test set for cross-domain VPR. For the project,
+queries from the Sun and Night subsets are used for training and testing.
+
+5 Steps
+5.1 Read and study the literature
+As a preliminary step to get familiar with the task, especially the retrieval part, start by reading
+papers like [3, 6, 19]. [16] is a survey, which goes into extensive details; if you want, you can
+use it to get a global overview. During the project, you are going to use popular VPR methods
+like NetVLAD(4096) [3], CosPlace(512) [5], MixVPR(4096) [2] and MegaLoc [4]. Read the papers
+carefully; make sure you understand the essence of the task and how to approach it.
+For the re-ranking part, instead, you are going to use methods like Superglue [21], LoFTR [24] and
+SuperPoint+LightGlue [9, 15]. Although it is not necessary to read the original papers, it is still
+essential to understand what Image Matching is (you can search online to get relevant resources and
+knowledge).
+
+5.2 Run experiments using the provided code
+Once you are familiar with the theory of Visual Place Recognition, you can start to run some
+experiments to understand how the whole VPR pipeline works.
+First, you should evaluate the performance of the VPR methods cited in Section 5.1 on the test sets
+of Section 4 using only the retrieval part (pay attention to the image size for each method). In this
+phase, experiment with different distance metrics for the K-nearest neighbors search, with K = 20.
+Specifically, compare the L2 distance with the dot product as the distance measure and evaluate
+how the metric choice influences the retrieval results. Do you see any changes? Why?
+After conducting these tests, select the metric that yields the best retrieval performance and use it
+for all subsequent experiments.
+Next, you should run Image Matching methods over the retrieval predictions (fix the image size to
+512 ×512 for input images to Image Matching methods) and analyze how performance changes (and
+at what price...). You should report your results in a table similar to the one displayed in Table 1
+using the methods cited in Section 5.1 and the test sets in Section 4–report only the results for the
+chosen distance measure. In addition, you should report other metrics, such as the processing time
+for a single query, to better understand the trade-off involved.
+Your coding, starting point can be found at the following link: FarInHeight/Visual-Place-Recognition-
+Project.
+After running these first experiments, try to see if you can find something interesting, like a correlation
+between queries’ correctness using only the retrieval part (consider only R@1) and the number
+of inliers with the first retrieved image. Try to plot some histograms of the number of inliers,
+differentiating between wrong and correct queries. Can you distinguish between wrong and correct
+queries using the number of inliers?
+
+6 Extentions
+6.1 Can Re-ranking be Adaptive? (both Retrieval and Re-ranking parts)
+The VPR world needs effective but also efficient solutions. One contribution could be to make
+adaptive the re-ranking part. Instead of blindly applying re-ranking for each query image, try to
+propose a solution where the image matching method re-ranks only when the query is hard. What
+does hard mean? Well, based on the previous study, it could mean that the number of inliers between
+the query and the first retrieved image is low with respect to the entire inliers’ distribution over the
+queries. Thus, one solution could be to apply re-ranking when the inliers count is below a certain
+threshold. How to decide the threshold? Can I avoid hard-thresholding and use instead a logistic
+regressor?
+Here, you should propose a definition of hard query (you can use the definition given above) and an
+adptive re-ranking strategy. If you decide to use hard-thresholding, I expect to see plots showing
+how R@1 varies as a function of the threshold and how dataset choice influences the threshold
+computation and final performance on test sets. If you use a logistic regression, I expect the same
+dataset-based analysis. Additionally, you should calculate the cost savings of your strategy.
+Pick two VPR methods and two Image Matching methods from your previous results. For training
+the logistic regressor or for threshold selection, use only the training sets–excluding GSV-XS. Use
+the validation sets to validate your hyperparameter selections. Then, evaluate on all the test sets.
+
