@@ -75,3 +75,8 @@ python -m vpr_uncertainty.eval \
 --inliers-dir '<path-to-inliers-folder>' \
 --z-data-path '<path-to-z-data-file>'
 ```
+
+## Run on Google Colab
+Click the badge to open the demo notebook in Colab:
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://github.com/venom-mancer/Visual_Place_Recognition_Project/blob/main/start_your_project.ipynb)
