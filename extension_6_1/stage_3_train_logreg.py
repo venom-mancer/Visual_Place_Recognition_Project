@@ -7,7 +7,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import StandardScaler
 import joblib
 
-from vpr_uncertainty.feature_io import load_feature_file
+from extension_6_1.stage_2_feature_io import load_feature_file
 
 
 def parse_arguments():

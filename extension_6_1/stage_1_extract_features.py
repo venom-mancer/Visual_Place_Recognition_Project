@@ -11,7 +11,7 @@ sys.path.append(str(
 ))
 
 from util import get_list_distances_from_preds
-from vpr_uncertainty.baselines import compute_sue
+from extension_6_1.baselines import compute_sue
 
 
 def parse_arguments():

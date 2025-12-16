@@ -4,8 +4,8 @@ from pathlib import Path
 import joblib
 import numpy as np
 
-from vpr_uncertainty.feature_io import load_feature_file
-from vpr_uncertainty.train_logreg import build_feature_matrix
+from extension_6_1.stage_2_feature_io import load_feature_file
+from extension_6_1.stage_3_train_logreg import build_feature_matrix
 
 
 def parse_arguments():
