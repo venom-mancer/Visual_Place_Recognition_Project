@@ -1,0 +1,22 @@
+ {
+        "latex-workshop.latex.tools": [
+          {
+            "name": "pdflatex",
+            "command": "pdflatex",
+            "args": [
+              "-interaction=nonstopmode",
+              "-synctex=1",
+              "%DOC%"
+            ]
+          }
+        ],
+        "latex-workshop.latex.recipes": [
+          {
+            "name": "pdflatex",
+            "tools": ["pdflatex"]
+          }
+        ],
+        "latex-workshop.latex.autoBuild.run": "never",
+        "latex-workshop.view.pdf.viewer": "tab"
+      }
+      
