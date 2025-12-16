@@ -1,0 +1,73 @@
+\documentclass{article}
+\usepackage{booktabs}   % Professional-looking tables
+\usepackage{tabularx}   % Auto-adjust column widths
+\usepackage{amsmath}    % For math symbols
+\usepackage[margin=1in]{geometry} % Optional: adjust margins
+
+\begin{document}
+
+\begin{table}[t]
+\centering
+\caption{Example table for performance measurements using Recall@N.}
+\label{tab:recallN}
+
+% Use tabularx to auto-fit columns
+\begin{tabularx}{\textwidth}{Xcccc}
+\toprule
+\textbf{Method} 
+& \textbf{Dataset 1- Tokyo-XS} 
+& \textbf{Dataset 2- SF-XS  } 
+& $\cdots$ 
+& \textbf{Dataset $N_D$} \\
+
+& R@1 / R@5 / R@10 
+& R@1 / R@5 / R@10 
+& $\cdots$ 
+& R@1 / R@5 / R@10 \\
+\midrule
+
+Netvlad 
+& R@1/R@5/R@10 & R@1/R@5/R@10 & $\cdots$ & R@1/R@5/R@10 \\
+
+Netvlad + SuperGlue 
+& R@1/R@5/R@10 & R@1/R@5/R@10 & $\cdots$ & R@1/R@5/R@10 \\
+
+Netvlad + LoFTR 
+& R@1/R@5/R@10 & R@1/R@5/R@10 & $\cdots$ & R@1/R@5/R@10 \\
+
+$\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ \\
+
+Netvlad + SuperPoint+LightGlue 
+& R@1/R@5/R@10 & R@1/R@5/R@10 & $\cdots$ & R@1/R@5/R@10 \\
+
+\midrule
+
+VPR Method 2 
+& R@1/R@5/R@10 & R@1/R@5/R@10 & $\cdots$ & R@1/R@5/R@10 \\
+
+VPR Method 2 + Image Matching method 1 
+& R@1/R@5/R@10 & R@1/R@5/R@10 & $\cdots$ & R@1/R@5/R@10 \\
+
+$\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ \\
+
+VPR Method 2 + Image Matching method $N_{IM}$ 
+& R@1/R@5/R@10 & R@1/R@5/R@10 & $\cdots$ & R@1/R@5/R@10 \\
+
+\midrule
+
+VPR Method $N_{VPR}$ 
+& R@1/R@5/R@10 & R@1/R@5/R@10 & $\cdots$ & R@1/R@5/R@10 \\
+
+VPR Method $N_{VPR}$ + Image Matching method 1 
+& R@1/R@5/R@10 & R@1/R@5/R@10 & $\cdots$ & R@1/R@5/R@10 \\
+
+$\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ \\
+
+VPR Method $N_{VPR}$ + Image Matching method $N_{IM}$ 
+& R@1/R@5/R@10 & R@1/R@5/R@10 & $\cdots$ & R@1/R@5/R@10 \\
+
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\end{document}
