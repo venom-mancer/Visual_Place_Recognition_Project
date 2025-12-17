@@ -17,6 +17,27 @@ import visualizations
 import vpr_models
 from test_dataset import TestDataset
 
+# Fix for Windows/IDE socket.send() errors with tqdm
+# The socket.send() error comes from IDE terminal backend, not Python code
+# Configure tqdm to minimize terminal interaction
+def get_tqdm_kwargs(args):
+    """Get tqdm configuration based on platform and args"""
+    if args.disable_progress:
+        # Completely disable progress bars
+        return {'disable': True}
+    
+    if sys.platform == "win32":
+        # Configure tqdm with conservative settings for Windows/IDE
+        return {
+            'ncols': 80,  # Fixed narrow width
+            'dynamic_ncols': False,  # Disable dynamic resizing
+            'miniters': 10,  # Update every 10 iterations
+            'mininterval': 1.0,  # Update at most once per second
+            'ascii': True,  # Use ASCII instead of Unicode (more compatible)
+        }
+    else:
+        return {}
+
 # Import temp directory setup utility
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from setup_temp_dir import setup_project_temp_directory
@@ -36,6 +57,9 @@ if sys.platform == "win32":
 def main(args):
     # Set up project-local temporary directory first
     setup_project_temp_directory()
+    
+    # Get tqdm configuration (needs args to check disable_progress flag)
+    tqdm_kwargs = get_tqdm_kwargs(args)
     
     start_time = datetime.now()
     start_time_seconds = time.time()
@@ -184,7 +208,7 @@ def main(args):
         )
         all_descriptors = np.empty((len(test_ds), args.descriptors_dimension), dtype="float32")
         
-        for batch_idx, (images, indices) in enumerate(tqdm(database_dataloader)):
+        for batch_idx, (images, indices) in enumerate(tqdm(database_dataloader, **tqdm_kwargs)):
             try:
                 # Move images to device
                 images_gpu = images.to(args.device, non_blocking=True)
@@ -257,7 +281,7 @@ def main(args):
             persistent_workers=persistent_workers,
             prefetch_factor=2 if num_workers > 0 else None
         )
-        for images, indices in tqdm(queries_dataloader):
+        for images, indices in tqdm(queries_dataloader, **tqdm_kwargs):
             try:
                 images_gpu = images.to(args.device, non_blocking=True)
                 # Extract descriptors with optional FP16 (mixed precision)
