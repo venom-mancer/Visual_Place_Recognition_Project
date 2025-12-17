@@ -26,6 +26,8 @@ from tqdm import tqdm
 import wandb
 import time
 
+# Add parent directory to path to import util and setup_temp_dir
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from util import get_list_distances_from_preds, read_file_preds
 from setup_temp_dir import setup_project_temp_directory
 
