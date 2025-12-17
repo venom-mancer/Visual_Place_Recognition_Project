@@ -102,6 +102,11 @@ def parse_arguments():
         help="use FP16 (half precision) for inference to reduce memory usage and speed up computation. "
         "Recommended for models with high memory requirements like NetVLAD.",
     )
+    parser.add_argument(
+        "--disable_progress",
+        action="store_true",
+        help="disable tqdm progress bars (useful to avoid socket.send() errors in IDE terminals on Windows)",
+    )
     args = parser.parse_args()
 
     args.use_labels = not args.no_labels
