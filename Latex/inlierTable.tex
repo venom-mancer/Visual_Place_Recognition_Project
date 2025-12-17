@@ -1,0 +1,145 @@
+\documentclass{article}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+
+\begin{document}
+
+\begin{table}[t]
+\centering
+\small
+\caption{Average number of inliers per query for different VPR and matching methods.}
+\label{tab:inliers}
+
+\begin{tabularx}{\textwidth}{
+>{\raggedright\arraybackslash}X
+>{\centering\arraybackslash}X
+>{\centering\arraybackslash}X
+>{\centering\arraybackslash}X
+>{\centering\arraybackslash}X}
+\toprule
+\textbf{Method} 
+& \textbf{Tokyo-XS}
+& \textbf{SF-XS}
+& \textbf{SVOX\_Sun}
+& \textbf{SVOX\_Night} \\
+\midrule
+
+NetVLAD
+& 124
+& 98
+& ---
+& 76 \\
+
+\\
+NetVLAD + SuperGlue
+& 356
+& 241
+& ---
+& 198 \\
+
+\\
+NetVLAD + LoFTR
+& 402
+& 265
+& ---
+& 221 \\
+
+\\
+NetVLAD + SuperPoint + LightGlue
+& 388
+& 254
+& ---
+& 213 \\
+\midrule
+
+CosPlace
+& 215
+& 189
+& ---
+& 174 \\
+
+\\
+CosPlace + SuperGlue
+& 512
+& 436
+& ---
+& 398 \\
+
+\\
+CosPlace + LoFTR
+& 548
+& 461
+& ---
+& 421 \\
+
+\\
+CosPlace + SuperPoint + LightGlue
+& 531
+& 452
+& ---
+& 409 \\
+\midrule
+
+\\
+MixVPR
+& 298
+& 243
+& ---
+& 261 \\
+
+\\
+MixVPR + SuperGlue
+& 621
+& 512
+& ---
+& 489 \\
+
+\\
+MixVPR + LoFTR
+& 654
+& 538
+& ---
+& 517 \\
+
+\\
+MixVPR + SuperPoint + LightGlue
+& 639
+& 526
+& ---
+& 503 \\
+\midrule
+
+\\
+MegaLoc
+& 742
+& 685
+& ---
+& 711 \\
+
+\\
+MegaLoc + SuperGlue
+& 901
+& 824
+& ---
+& 856 \\
+
+MegaLoc + LoFTR
+& 934
+& 851
+& ---
+& 879 \\
+
+\\
+MegaLoc + SuperPoint + LightGlue
+& 918
+& 836
+& ---
+& 864 \\
+\bottomrule
+\end{tabularx}
+
+\end{table}
+
+\end{document}
