@@ -2,9 +2,9 @@
 Adaptive re-ranking with *adaptive matching* (Option B).
 
 For each query (test time):
-  1) Use existing LoFTR top-1 inliers + trained LR model to decide if the query is EASY or HARD.
-  2) EASY  → trust retrieval-only ranking (no extra LoFTR, no re-ranking).
-  3) HARD  → on-the-fly run LoFTR for top-K predictions, re-rank by inliers, then evaluate Recall@N.
+  1) Use existing matcher top-1 inliers + trained LR model to decide if the query is EASY or HARD.
+  2) EASY  → trust retrieval-only ranking (no extra image matching, no re-ranking).
+  3) HARD  → on-the-fly run the chosen matcher for top-K predictions, re-rank by inliers, then evaluate Recall@N.
 
 This script:
   - Never overwrites your existing logs (top-1 inliers are read-only).
@@ -64,7 +64,7 @@ def parse_arguments():
         "--top1-inliers-dir",
         type=str,
         required=True,
-        help="Directory with .torch files containing LoFTR results for TOP-1 only.",
+        help="Directory with .torch files containing matcher results for TOP-1 only.",
     )
     parser.add_argument(
         "--lr-model",
@@ -212,8 +212,8 @@ def main(args):
     print(f"\nProcessing {total_queries} queries...")
     print("Adaptive strategy:")
     print("  - Always use existing top-1 inliers for LR decision.")
-    print("  - EASY  → retrieval-only, no extra LoFTR.")
-    print("  - HARD  → run LoFTR for top-K, then re-rank by inliers.\n")
+    print("  - EASY  → retrieval-only, no extra image matching.")
+    print("  - HARD  → run the chosen matcher for top-K, then re-rank by inliers.\n")
 
     for txt_file_query in tqdm(txt_files):
         try:
@@ -259,7 +259,7 @@ def main(args):
                 ranking_dists = geo_dists
 
             else:
-                # HARD: on-the-fly LoFTR for top-K predictions, then re-rank
+                # HARD: on-the-fly image matching for top-K predictions, then re-rank
                 hard_queries += 1
 
                 # Read query + prediction paths
@@ -328,7 +328,7 @@ def main(args):
             f"({easy_queries / processed_queries * 100.0:.1f}%)"
         )
         print(
-            f"Hard queries (full LoFTR + re-ranking): {hard_queries} "
+            f"Hard queries (full matcher run + re-ranking): {hard_queries} "
             f"({hard_queries / processed_queries * 100.0:.1f}%)"
         )
         print("\nRecall@N (adaptive strategy):")
@@ -337,14 +337,14 @@ def main(args):
 
         # Cost metrics
         avg_extra_pairs = extra_loftr_pairs / processed_queries
-        # If we include the already-computed top-1 per query, this is the total LoFTR cost:
+        # If we include the already-computed top-1 per query, this is the total matching cost:
         avg_total_pairs_incl_top1 = avg_extra_pairs + 1.0
 
         print(f"\nTiming:")
         print(f"  Total runtime: {total_time_sec:.1f} s")
         print(f"  Avg runtime per processed query: {avg_time_per_query:.4f} s/query")
 
-        print(f"\nCost metrics (LoFTR pairs):")
+        print(f"\nCost metrics (matcher pairs):")
         print(f"  Extra pairs run in this script (beyond precomputed top-1): {extra_loftr_pairs}")
         print(f"  Avg extra pairs per processed query: {avg_extra_pairs:.2f}")
         print(

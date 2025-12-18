@@ -1,0 +1,13 @@
+================================================================================
+LR Hyperparameter Tuning Summary
+================================================================================
+
+Training CSV: adaptive_reranking\csv_files\lr_data_mixvpr_superpoint-lg_svox_train.csv
+Validation CSV: adaptive_reranking\csv_files\lr_data_mixvpr_superpoint-lg_sf_xs_val.csv
+
+Best Hyperparameters:
+  C (regularization): 3.00
+  Threshold: 0.30
+  Validation ROC-AUC: 0.9500
+  Validation Accuracy: 0.9070
+  % Queries re-ranked: 18.09%
