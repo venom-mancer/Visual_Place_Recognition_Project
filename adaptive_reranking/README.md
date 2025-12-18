@@ -25,7 +25,7 @@ adaptive_reranking/
 
 ## 🎯 Overview
 
-**Adaptive Re-Ranking (Option B)** makes the expensive image matching step (LoFTR/SuperGlue) adaptive:
+**Adaptive Re-Ranking** makes the expensive image matching step (LoFTR/SuperGlue) adaptive:
 
 1. **For every query**: Run matcher for **top-1 only** (cheap, needed for LR decision)
 2. **Use trained LR model** to predict: Is top-1 likely correct? (`P(correct | inliers_top1)`)
@@ -396,9 +396,11 @@ For **CosPlace + LoFTR** on SVOX test Sun:
 
 ## 📝 Notes
 
-- **All scripts should be run from the project root** (not from inside `adaptive_reranking/`)
-- CSV files are stored in `csv_files/` for organization
-- Each VPR+Matcher combination gets its own `tuning_results_*/` folder
+- **Where to run commands**:
+  - Run `python main.py ...` and `python ..\reranking.py ...` **from** `VPR-methods-evaluation/`
+  - Run `python match_queries_preds.py ...` and `python adaptive_reranking\...` **from the project root**
+- CSV files are stored in `adaptive_reranking/csv_files/` for organization
+- Each VPR+Matcher combination gets its own `tuning_results_*/` folder under `adaptive_reranking/`
 - The adaptive script **never overwrites** your existing log folders (reads top-1 inliers, writes nothing)
 
 ## 🔧 Dependencies
