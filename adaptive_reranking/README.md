@@ -171,8 +171,8 @@ Same steps, but:
 Below is the **exact pipeline** used for `MixVPR + SuperPoint+LightGlue` on SVOX / SF-XS / Tokyo-XS.
 
 - **Conventions**:
-  - Commands with `python main.py` are run from `VPR-methods-evaluation/`
-  - Commands with `python adaptive_reranking\...` or `python match_queries_preds.py` are run from the **project root**
+  - Commands with `python main.py`, `python ..\match_queries_preds.py`, and `python ..\reranking.py` are run from `VPR-methods-evaluation/`
+  - Commands with `python adaptive_reranking\...` are run from the **project root**
 
 #### 1) Train LR: SVOX train (Sun + Night) + SF-XS val
 
@@ -193,13 +193,14 @@ python main.py --method=mixvpr --backbone=ResNet50 --descriptors_dimension=4096 
   --log_dir logs_mixvpr_svox_train_night
 ```
 
-- **Phase 2 – SuperPoint+LightGlue top‑1 inliers on SVOX train** (run from **project root**):
+- **Phase 2 – SuperPoint+LightGlue top‑1 inliers on SVOX train** (run from `VPR-methods-evaluation/`):
 
 ```powershell
-python match_queries_preds.py --preds-dir VPR-methods-evaluation/logs/logs_mixvpr_svox_train_sun/2025-12-17_21-10-57/preds `
+cd VPR-methods-evaluation
+python ..\match_queries_preds.py --preds-dir logs/logs_mixvpr_svox_train_sun/2025-12-17_21-10-57/preds `
   --matcher superpoint-lg --device cuda --im-size 512 --num-preds 1
 
-python match_queries_preds.py --preds-dir VPR-methods-evaluation/logs/logs_mixvpr_svox_train_night/2025-12-17_21-16-22/preds `
+python ..\match_queries_preds.py --preds-dir logs/logs_mixvpr_svox_train_night/2025-12-17_21-16-22/preds `
   --matcher superpoint-lg --device cuda --im-size 512 --num-preds 1
 ```
 
@@ -229,8 +230,7 @@ python main.py --method=mixvpr --backbone=ResNet50 --descriptors_dimension=4096 
 ```
 
 ```powershell
-cd ..
-python match_queries_preds.py --preds-dir VPR-methods-evaluation/logs/logs_mixvpr_sf_xs_val/2025-12-17_21-46-57/preds `
+python ..\match_queries_preds.py --preds-dir logs/logs_mixvpr_sf_xs_val/2025-12-17_21-46-57/preds `
   --matcher superpoint-lg --device cuda --im-size 512 --num-preds 1
 
 python adaptive_reranking\build_lr_dataset.py `
@@ -284,19 +284,19 @@ python main.py --method=mixvpr --backbone=ResNet50 --descriptors_dimension=4096 
   --log_dir logs_mixvpr_tokyo_xs_test
 ```
 
-- **Phase 2 – SuperPoint+LG top‑1 inliers for all test sets** (project root):
+- **Phase 2 – SuperPoint+LG top‑1 inliers for all test sets** (run from `VPR-methods-evaluation/`):
 
 ```powershell
-python match_queries_preds.py --preds-dir VPR-methods-evaluation/logs/logs_mixvpr_svox_test_sun/2025-12-17_22-49-10/preds `
+python ..\match_queries_preds.py --preds-dir logs/logs_mixvpr_svox_test_sun/2025-12-17_22-49-10/preds `
   --matcher superpoint-lg --device cuda --im-size 512 --num-preds 1
 
-python match_queries_preds.py --preds-dir VPR-methods-evaluation/logs/logs_mixvpr_svox_test_night/2025-12-17_23-02-33/preds `
+python ..\match_queries_preds.py --preds-dir logs/logs_mixvpr_svox_test_night/2025-12-17_23-02-33/preds `
   --matcher superpoint-lg --device cuda --im-size 512 --num-preds 1
 
-python match_queries_preds.py --preds-dir VPR-methods-evaluation/logs/logs_mixvpr_sf_xs_test/2025-12-17_23-07-12/preds `
+python ..\match_queries_preds.py --preds-dir logs/logs_mixvpr_sf_xs_test/2025-12-17_23-07-12/preds `
   --matcher superpoint-lg --device cuda --im-size 512 --num-preds 1
 
-python match_queries_preds.py --preds-dir VPR-methods-evaluation/logs/logs_mixvpr_tokyo_xs_test/2025-12-17_23-13-42/preds `
+python ..\match_queries_preds.py --preds-dir logs/logs_mixvpr_tokyo_xs_test/2025-12-17_23-13-42/preds `
   --matcher superpoint-lg --device cuda --im-size 512 --num-preds 1
 ```
 
@@ -336,27 +336,27 @@ python ..\adaptive_reranking\adaptive_reranking_eval.py `
 
 #### 3) Full (non‑adaptive) pipeline for comparison
 
-- **Phase 1 – Get SuperPoint‑LG inliers for top‑20** (project root):
+- **Phase 1 – Get SuperPoint‑LG inliers for top‑20** (run from `VPR-methods-evaluation/`):
 
 ```powershell
-python match_queries_preds.py `
-  --preds-dir VPR-methods-evaluation/logs/logs_mixvpr_svox_test_sun/2025-12-17_22-49-10/preds `
-  --out-dir  VPR-methods-evaluation/logs/logs_mixvpr_svox_test_sun/2025-12-17_22-49-10/preds_superpoint-lg_full20 `
+python ..\match_queries_preds.py `
+  --preds-dir logs/logs_mixvpr_svox_test_sun/2025-12-17_22-49-10/preds `
+  --out-dir  logs/logs_mixvpr_svox_test_sun/2025-12-17_22-49-10/preds_superpoint-lg_full20 `
   --matcher superpoint-lg --device cuda --im-size 512 --num-preds 20
 
-python match_queries_preds.py `
-  --preds-dir VPR-methods-evaluation/logs/logs_mixvpr_svox_test_night/2025-12-17_23-02-33/preds `
-  --out-dir  VPR-methods-evaluation/logs/logs_mixvpr_svox_test_night/2025-12-17_23-02-33/preds_superpoint-lg_full20 `
+python ..\match_queries_preds.py `
+  --preds-dir logs/logs_mixvpr_svox_test_night/2025-12-17_23-02-33/preds `
+  --out-dir  logs/logs_mixvpr_svox_test_night/2025-12-17_23-02-33/preds_superpoint-lg_full20 `
   --matcher superpoint-lg --device cuda --im-size 512 --num-preds 20
 
-python match_queries_preds.py `
-  --preds-dir VPR-methods-evaluation/logs/logs_mixvpr_sf_xs_test/2025-12-17_23-07-12/preds `
-  --out-dir  VPR-methods-evaluation/logs/logs_mixvpr_sf_xs_test/2025-12-17_23-07-12/preds_superpoint-lg_full20 `
+python ..\match_queries_preds.py `
+  --preds-dir logs/logs_mixvpr_sf_xs_test/2025-12-17_23-07-12/preds `
+  --out-dir  logs/logs_mixvpr_sf_xs_test/2025-12-17_23-07-12/preds_superpoint-lg_full20 `
   --matcher superpoint-lg --device cuda --im-size 512 --num-preds 20
 
-python match_queries_preds.py `
-  --preds-dir VPR-methods-evaluation/logs/logs_mixvpr_tokyo_xs_test/2025-12-17_23-13-42/preds `
-  --out-dir  VPR-methods-evaluation/logs/logs_mixvpr_tokyo_xs_test/2025-12-17_23-13-42/preds_superpoint-lg_full20 `
+python ..\match_queries_preds.py `
+  --preds-dir logs/logs_mixvpr_tokyo_xs_test/2025-12-17_23-13-42/preds `
+  --out-dir  logs/logs_mixvpr_tokyo_xs_test/2025-12-17_23-13-42/preds_superpoint-lg_full20 `
   --matcher superpoint-lg --device cuda --im-size 512 --num-preds 20
 ```
 
@@ -397,8 +397,8 @@ For **CosPlace + LoFTR** on SVOX test Sun:
 ## 📝 Notes
 
 - **Where to run commands**:
-  - Run `python main.py ...` and `python ..\reranking.py ...` **from** `VPR-methods-evaluation/`
-  - Run `python match_queries_preds.py ...` and `python adaptive_reranking\...` **from the project root**
+  - Run `python main.py ...`, `python ..\match_queries_preds.py ...`, and `python ..\reranking.py ...` **from** `VPR-methods-evaluation/`
+  - Run `python adaptive_reranking\...` **from the project root**
 - CSV files are stored in `adaptive_reranking/csv_files/` for organization
 - Each VPR+Matcher combination gets its own `tuning_results_*/` folder under `adaptive_reranking/`
 - The adaptive script **never overwrites** your existing log folders (reads top-1 inliers, writes nothing)
