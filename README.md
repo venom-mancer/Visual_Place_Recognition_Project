@@ -76,3 +76,37 @@ python -m vpr_uncertainty.eval \
 --z-data-path '<path-to-z-data-file>'
 ```
 # myVPR
+
+---
+
+## 📚 Comprehensive Documentation
+
+This project implements **Adaptive Re-ranking for Visual Place Recognition** - a method to selectively apply expensive image matching only to "hard" queries, achieving significant time savings while maintaining good accuracy.
+
+### Quick Links
+
+- **[📖 Project Overview](docs/PROJECT_OVERVIEW.md)** - Complete project introduction, achievements, and quick start guide
+- **[🔄 Pipeline Guide](docs/PIPELINE_GUIDE.md)** - Step-by-step pipeline walkthrough (Stages 1-6)
+- **[🔬 Methodology](docs/METHODOLOGY.md)** - Different approaches: Regressor vs Logistic Regression
+- **[📊 Results](docs/RESULTS.md)** - Complete experimental results across all test datasets
+- **[🛠️ Technical Details](docs/TECHNICAL_DETAILS.md)** - Implementation details, fixes, and feature engineering
+
+### Key Results
+
+| Method | R@1 | Time Savings | R@1 Gain |
+|--------|-----|--------------|-----------|
+| Baseline | 63.1% | 100% | - |
+| Full Re-ranking | 77.4% | 0% | +14.3% |
+| **Adaptive (LogReg Easy)** | **69.8%** | **74.6%** | **+6.7%** |
+
+*Results on SF-XS test dataset (1,000 queries)*
+
+---
+
+## 🚀 Quick Start
+
+See [Project Overview](docs/PROJECT_OVERVIEW.md) for detailed quick start guide.
+
+---
+
+*For detailed documentation, see the [docs/](docs/) directory.*

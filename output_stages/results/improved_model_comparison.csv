@@ -1,0 +1,6 @@
+Method,Features,Queries Processed,R@1,R@5,R@10,R@20,Time Saved
+Baseline,-,0% (0),63.1,74.8,78.6,81.4,-
+Full Re-ranking,4,100% (1000),77.4,80.3,80.9,81.4,-
+Original Adaptive,4,100% (1000),76.6,79.9,80.8,81.4,0.1 min
+Previous Optimized,3,20.2% (202),67.5,76.8,79.4,81.4,75.6%
+Improved Model,8,40.7% (407),68.7,77.1,79.7,81.4,59.3%

@@ -1,0 +1,5 @@
+Method,R@1,R@5,R@10,R@20,Image Matching Time,Total Time,Time Saved
+Baseline,63.1,74.8,78.6,81.4,0 min,9.19 min,-
+Always Re-rank,77.4,80.3,80.9,81.4,157.9 min,167.2 min,-
+Original Adaptive,76.6,79.9,80.8,81.4,157.9 min,167.1 min,0.1 min
+Optimized Adaptive,67.5,76.8,79.4,81.4,31.6 min,40.8 min,126.4 min (75.6%)
