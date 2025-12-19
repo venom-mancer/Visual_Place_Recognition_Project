@@ -1,0 +1,30 @@
+{
+  "svox_test_sun": {
+    "preds_dir": "C:\\Users\\siava\\Desktop\\Third Semester\\adv_ml\\project\\VPR_Project\\Visual_Place_Recognition_Project\\VPR-methods-evaluation\\logs\\logs_mixvpr_svox_test_sun\\2025-12-17_22-49-10\\preds",
+    "inliers_dir": "C:\\Users\\siava\\Desktop\\Third Semester\\adv_ml\\project\\VPR_Project\\Visual_Place_Recognition_Project\\VPR-methods-evaluation\\logs\\logs_mixvpr_svox_test_sun\\2025-12-17_22-49-10\\preds_loftr_full20",
+    "matcher_seconds": 1914.3027520179749,
+    "reranking_seconds": 33.79511046409607,
+    "total_seconds": 1948.097862482071
+  },
+  "svox_test_night": {
+    "preds_dir": "C:\\Users\\siava\\Desktop\\Third Semester\\adv_ml\\project\\VPR_Project\\Visual_Place_Recognition_Project\\VPR-methods-evaluation\\logs\\logs_mixvpr_svox_test_night\\2025-12-17_23-02-33\\preds",
+    "inliers_dir": "C:\\Users\\siava\\Desktop\\Third Semester\\adv_ml\\project\\VPR_Project\\Visual_Place_Recognition_Project\\VPR-methods-evaluation\\logs\\logs_mixvpr_svox_test_night\\2025-12-17_23-02-33\\preds_loftr_full20",
+    "matcher_seconds": 1847.9287202358246,
+    "reranking_seconds": 28.761581659317017,
+    "total_seconds": 1876.6903018951416
+  },
+  "sf_xs_test": {
+    "preds_dir": "C:\\Users\\siava\\Desktop\\Third Semester\\adv_ml\\project\\VPR_Project\\Visual_Place_Recognition_Project\\VPR-methods-evaluation\\logs\\logs_mixvpr_sf_xs_test\\2025-12-17_23-07-12\\preds",
+    "inliers_dir": "C:\\Users\\siava\\Desktop\\Third Semester\\adv_ml\\project\\VPR_Project\\Visual_Place_Recognition_Project\\VPR-methods-evaluation\\logs\\logs_mixvpr_sf_xs_test\\2025-12-17_23-07-12\\preds_loftr_full20",
+    "matcher_seconds": 2339.364279985428,
+    "reranking_seconds": 29.55098056793213,
+    "total_seconds": 2368.91526055336
+  },
+  "tokyo_xs_test": {
+    "preds_dir": "C:\\Users\\siava\\Desktop\\Third Semester\\adv_ml\\project\\VPR_Project\\Visual_Place_Recognition_Project\\VPR-methods-evaluation\\logs\\logs_mixvpr_tokyo_xs_test\\2025-12-17_23-13-42\\preds",
+    "inliers_dir": "C:\\Users\\siava\\Desktop\\Third Semester\\adv_ml\\project\\VPR_Project\\Visual_Place_Recognition_Project\\VPR-methods-evaluation\\logs\\logs_mixvpr_tokyo_xs_test\\2025-12-17_23-13-42\\preds_loftr_full20",
+    "matcher_seconds": 724.4287741184235,
+    "reranking_seconds": 11.428980827331543,
+    "total_seconds": 735.857754945755
+  }
+}

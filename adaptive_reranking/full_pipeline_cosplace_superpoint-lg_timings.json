@@ -1,0 +1,30 @@
+{
+  "svox_test_sun": {
+    "preds_dir": "C:\\Users\\siava\\Desktop\\Third Semester\\adv_ml\\project\\VPR_Project\\Visual_Place_Recognition_Project\\VPR-methods-evaluation\\logs\\logs_cosplace_svox_test_sun\\2025-12-16_20-56-45\\preds",
+    "inliers_dir": "C:\\Users\\siava\\Desktop\\Third Semester\\adv_ml\\project\\VPR_Project\\Visual_Place_Recognition_Project\\VPR-methods-evaluation\\logs\\logs_cosplace_svox_test_sun\\2025-12-16_20-56-45\\preds_superpoint-lg_full20",
+    "matcher_seconds": 1850.3430194854736,
+    "reranking_seconds": 33.00256037712097,
+    "total_seconds": 1883.3455798625946
+  },
+  "svox_test_night": {
+    "preds_dir": "C:\\Users\\siava\\Desktop\\Third Semester\\adv_ml\\project\\VPR_Project\\Visual_Place_Recognition_Project\\VPR-methods-evaluation\\logs\\logs_cosplace_svox_test_night\\2025-12-16_21-30-20\\preds",
+    "inliers_dir": "C:\\Users\\siava\\Desktop\\Third Semester\\adv_ml\\project\\VPR_Project\\Visual_Place_Recognition_Project\\VPR-methods-evaluation\\logs\\logs_cosplace_svox_test_night\\2025-12-16_21-30-20\\preds_superpoint-lg_full20",
+    "matcher_seconds": 1754.0503914356232,
+    "reranking_seconds": 31.41582202911377,
+    "total_seconds": 1785.466213464737
+  },
+  "sf_xs_test": {
+    "preds_dir": "C:\\Users\\siava\\Desktop\\Third Semester\\adv_ml\\project\\VPR_Project\\Visual_Place_Recognition_Project\\VPR-methods-evaluation\\logs\\logs_cosplace_sf_xs_test\\2025-12-16_20-37-45\\preds",
+    "inliers_dir": "C:\\Users\\siava\\Desktop\\Third Semester\\adv_ml\\project\\VPR_Project\\Visual_Place_Recognition_Project\\VPR-methods-evaluation\\logs\\logs_cosplace_sf_xs_test\\2025-12-16_20-37-45\\preds_superpoint-lg_full20",
+    "matcher_seconds": 2125.6751186847687,
+    "reranking_seconds": 32.365938663482666,
+    "total_seconds": 2158.0410573482513
+  },
+  "tokyo_xs_test": {
+    "preds_dir": "C:\\Users\\siava\\Desktop\\Third Semester\\adv_ml\\project\\VPR_Project\\Visual_Place_Recognition_Project\\VPR-methods-evaluation\\logs\\logs_cosplace_tokyo_xs_test\\2025-12-16_20-51-23\\preds",
+    "inliers_dir": "C:\\Users\\siava\\Desktop\\Third Semester\\adv_ml\\project\\VPR_Project\\Visual_Place_Recognition_Project\\VPR-methods-evaluation\\logs\\logs_cosplace_tokyo_xs_test\\2025-12-16_20-51-23\\preds_superpoint-lg_full20",
+    "matcher_seconds": 667.5076763629913,
+    "reranking_seconds": 11.995778560638428,
+    "total_seconds": 679.5034549236298
+  }
+}
