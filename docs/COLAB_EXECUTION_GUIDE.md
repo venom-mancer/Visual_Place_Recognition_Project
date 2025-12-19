@@ -34,9 +34,21 @@ This guide explains how to run the adaptive re-ranking pipeline in **Google Cola
 ### Option 1: Use the Colab Notebook
 
 1. **Open the notebook**: `COLAB_ADAPTIVE_RERANKING_PIPELINE.ipynb`
-2. **Upload to Colab**: File → Upload notebook
+2. **Upload to Colab**: File → Upload notebook (only needed once!)
 3. **Enable GPU**: Runtime → Change runtime type → GPU (T4)
 4. **Run cells**: Execute cells sequentially
+
+### 🔄 Updating Code Without Re-uploading
+
+**Good news**: You don't need to re-upload the notebook if you modify Python scripts!
+
+**If you modify Python scripts** (e.g., `extension_6_1/stage_*.py`, `adaptive_reranking_threshold_analysis.py`):
+1. Commit and push to GitHub
+2. In Colab, run the "Pull latest changes" cell (or re-run the clone cell)
+3. Your code is updated! ✅
+
+**If you modify the notebook itself** (e.g., add new cells):
+- Yes, you need to re-upload the notebook
 
 ### Option 2: Manual Setup
 
