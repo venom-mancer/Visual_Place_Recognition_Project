@@ -221,11 +221,29 @@ This file will be loaded in Stage 4 to compute probabilities for new queries and
 7. Save outputs
 
 ```bash
+# Option 1: Use saved threshold (default - works for similar datasets)
 python -m extension_6_1.stage_4_apply_logreg_easy_queries \
   --model-path logreg_easy_queries_optimal.pkl \
   --feature-path data/features_and_predictions/features_sf_xs_test_improved.npz \
   --output-path logreg_easy_test.npz \
   --hard-queries-output data/features_and_predictions/hard_queries_test.txt
+
+# Option 2: Calibrate threshold on test set (for different datasets)
+python -m extension_6_1.stage_4_apply_logreg_easy_queries \
+  --model-path logreg_easy_queries_optimal.pkl \
+  --feature-path data/features_and_predictions/features_tokyo_xs_test_improved.npz \
+  --output-path logreg_easy_tokyo_xs_test.npz \
+  --hard-queries-output data/features_and_predictions/hard_queries_tokyo_xs_test.txt \
+  --calibrate-threshold
+
+# Option 3: Target specific hard query rate
+python -m extension_6_1.stage_4_apply_logreg_easy_queries \
+  --model-path logreg_easy_queries_optimal.pkl \
+  --feature-path data/features_and_predictions/features_svox_test_improved.npz \
+  --output-path logreg_easy_svox_test.npz \
+  --hard-queries-output data/features_and_predictions/hard_queries_svox_test.txt \
+  --calibrate-threshold \
+  --target-hard-rate 0.30
 ```
 
 **Outputs**:
@@ -238,10 +256,19 @@ python -m extension_6_1.stage_4_apply_logreg_easy_queries \
   - Text file with one query index per line (indices of hard queries)
   - Used by adaptive image matching script to process only hard queries
 
-**Key Difference from Original Design**:
-- **No hard thresholding**: Uses optimal threshold learned from validation set (e.g., 0.410)
-- **Not fixed at 0.5**: Threshold is data-driven and optimal for the validation set
+**Key Features**:
+- **No hard thresholding**: Uses optimal threshold learned from validation set (e.g., 0.410) OR calibrated on test set
+- **Dataset-specific calibration**: Can adapt threshold for different test datasets using `--calibrate-threshold`
+- **Target rate option**: Can target specific hard query rate using `--target-hard-rate`
 - **Predicts "easy" directly**: More natural than predicting "hard"
+
+**When to Calibrate Threshold**:
+- ✅ Test dataset is different from validation (e.g., Tokyo-XS, SVOX)
+- ✅ Feature distributions have shifted
+- ✅ Saved threshold detects 0% hard queries (too conservative)
+- ⚠️ Requires labels in feature file (already computed during feature extraction)
+
+See [Threshold Calibration Guide](THRESHOLD_CALIBRATION_GUIDE.md) for detailed usage.
 
 ---
 

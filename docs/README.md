@@ -47,6 +47,16 @@ Welcome to the comprehensive documentation for the **Visual Place Recognition - 
 - Detailed stage-by-stage documentation
 - Integrated from original stage.md files
 
+### 7. [Threshold Calibration Guide](THRESHOLD_CALIBRATION_GUIDE.md)
+- Solving dataset distribution shift problem
+- How to calibrate thresholds for different test datasets
+- F1-maximization vs target rate calibration
+
+### 8. [Threshold Analysis](THRESHOLD_ANALYSIS.md)
+- R@1 vs threshold plots for different datasets
+- Dataset influence on threshold computation
+- Cost savings calculation and visualization
+
 ---
 
 ## 🚀 Quick Navigation

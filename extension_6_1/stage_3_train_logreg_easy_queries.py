@@ -15,6 +15,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score, roc_curve
 import joblib
+from tqdm import tqdm
 
 
 def load_feature_file(path: str) -> dict:
@@ -142,8 +143,57 @@ def main(args):
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     
-    # Train logistic regression
+    # Tune C (regularization parameter) on validation set if available
+    optimal_C = 1.0  # Default
+    if args.val_features is not None:
+        print(f"\n{'='*70}")
+        print(f"HYPERPARAMETER TUNING: Finding optimal C (regularization)")
+        print(f"{'='*70}")
+        
+        val_features = load_feature_file(args.val_features)
+        X_val, y_val, _ = build_feature_matrix(val_features)
+        
+        # Handle NaNs
+        val_valid_mask = ~np.isnan(X_val).any(axis=1)
+        X_val = X_val[val_valid_mask]
+        y_val = y_val[val_valid_mask]
+        
+        # Test different C values
+        C_values = [0.01, 0.1, 1.0, 10.0, 100.0]
+        best_C = 1.0
+        best_val_f1 = 0.0
+        
+        print(f"Testing C values: {C_values}")
+        for C in tqdm(C_values, desc="Tuning C"):
+            # Train with this C
+            logreg_temp = LogisticRegression(
+                C=C,
+                solver="lbfgs",
+                max_iter=1000,
+                class_weight='balanced',
+            )
+            logreg_temp.fit(X_train_scaled, y_train)
+            
+            # Evaluate on validation set
+            X_val_scaled = scaler.transform(X_val)
+            y_val_probs = logreg_temp.predict_proba(X_val_scaled)[:, 1]
+            
+            # Find optimal threshold for this C
+            threshold_temp, _ = find_optimal_threshold(y_val, y_val_probs, method=args.threshold_method)
+            y_val_pred = (y_val_probs >= threshold_temp).astype(int)
+            val_f1 = f1_score(y_val, y_val_pred, zero_division=0)
+            
+            if val_f1 > best_val_f1:
+                best_val_f1 = val_f1
+                best_C = C
+        
+        optimal_C = best_C
+        print(f"\nOptimal C: {optimal_C} (validation F1: {best_val_f1:.4f})")
+        print(f"{'='*70}\n")
+    
+    # Train logistic regression with optimal C
     logreg = LogisticRegression(
+        C=optimal_C,
         solver="lbfgs",
         max_iter=1000,
         class_weight='balanced',  # Handle class imbalance
@@ -164,13 +214,16 @@ def main(args):
     print(f"  ROC-AUC: {train_roc_auc:.4f}")
     
     # Optional validation - find optimal threshold and evaluate performance
-    # IMPORTANT: We use validation set for BOTH:
-    # 1. Finding optimal threshold (by trying different thresholds)
-    # 2. Evaluating model performance (using the optimal threshold)
-    # This is the correct approach - threshold is learned from validation, not training
+    # IMPORTANT: We use validation set for:
+    # 1. Tuning C (regularization parameter) - done above if val_features provided
+    # 2. Finding optimal threshold (by trying different thresholds)
+    # 3. Evaluating model performance (using the optimal threshold)
+    # This is the correct approach - both C and threshold are learned from validation, not training
     optimal_threshold = 0.5
     if args.val_features is not None:
         # Use separate validation set (SF-XS val) for threshold selection AND evaluation
+        # Note: If C tuning was done above, validation set was already loaded, but we reload here
+        # for clarity (could be optimized to reuse, but this is clearer)
         val_features = load_feature_file(args.val_features)
         X_val, y_val, _ = build_feature_matrix(val_features)
         
@@ -181,12 +234,12 @@ def main(args):
         
         # Scale and predict (using scaler fitted on training data)
         X_val_scaled = scaler.transform(X_val)
-        y_val_probs = logreg.predict_proba(X_val_scaled)[:, 1]
+        y_val_probs = logreg.predict_proba(X_val_scaled)[:, 1]  # Model trained with optimal_C
         
         print(f"\n{'='*70}")
         print(f"VALIDATION PHASE: Threshold Selection + Performance Evaluation")
         print(f"{'='*70}")
-        print(f"Step 1: Find optimal threshold on validation set")
+        print(f"Step 1: Find optimal threshold on validation set (model trained with C={optimal_C})")
         print(f"  - Trying different thresholds (0.1 to 0.95)")
         print(f"  - Selecting threshold that maximizes {args.threshold_method} score")
         print(f"  - This prevents overfitting (threshold not selected on training data)")
@@ -236,6 +289,7 @@ def main(args):
         "optimal_threshold": optimal_threshold,
         "threshold_method": args.threshold_method,
         "target_type": "easy_score",  # Predict easy queries
+        "optimal_C": optimal_C,  # Save the tuned C value
     }
     
     output_path = Path(args.output_model)
