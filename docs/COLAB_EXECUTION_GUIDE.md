@@ -43,9 +43,18 @@ This guide explains how to run the adaptive re-ranking pipeline in **Google Cola
 **Good news**: You don't need to re-upload the notebook if you modify Python scripts!
 
 **If you modify Python scripts** (e.g., `extension_6_1/stage_*.py`, `adaptive_reranking_threshold_analysis.py`):
-1. Commit and push to GitHub
-2. In Colab, run the "Pull latest changes" cell (or re-run the clone cell)
-3. Your code is updated! ✅
+
+1. **Modify code locally** (edit `.py` files on your computer)
+2. **Commit and push to GitHub** (required!):
+   ```bash
+   git add .
+   git commit -m "Your changes"
+   git push origin Amir_Extention_6.1
+   ```
+3. **In Colab**, run the "Pull latest changes" cell
+4. Your code is updated! ✅
+
+**Important**: You MUST push to GitHub first! Colab pulls from GitHub, not from your local machine.
 
 **If you modify the notebook itself** (e.g., add new cells):
 - Yes, you need to re-upload the notebook
