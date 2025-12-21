@@ -7,7 +7,7 @@ import torch
 
 # Add parent directory to path to import util
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from util import read_file_preds
+from util import read_file_preds, get_list_distances_from_preds
 
 
 def build_rows(
@@ -50,23 +50,37 @@ def build_rows(
             continue
         top1_path = pred_paths[0]
 
-        # Read positives list from the txt file (ground-truth matches within 25m)
-        with open(txt_file, "r") as f:
-            lines = [line.strip() for line in f.readlines()]
-
-        positives = []
-        if "Positives paths:" in lines:
-            start_idx = lines.index("Positives paths:") + 1
-            positives = [l for l in lines[start_idx:] if l]
-
         # Load matcher results and take inliers for top-1 only
         results = torch.load(torch_file, weights_only=False)
         if len(results) == 0:
             continue
         inliers_top1 = int(results[0]["num_inliers"])
 
-        # Label: 1 if top-1 prediction is one of the positives, else 0
-        is_top1_correct = 1 if top1_path in positives else 0
+        # Label: 1 if top-1 distance <= 25m (consistent with evaluation metric)
+        # Use distance-based computation instead of path matching for consistency
+        try:
+            geo_dists = get_list_distances_from_preds(str(txt_file))
+            if len(geo_dists) > 0:
+                top1_distance = geo_dists[0]
+                is_top1_correct = 1 if top1_distance <= 25.0 else 0
+            else:
+                # Fallback to path matching if distance computation fails
+                with open(txt_file, "r") as f:
+                    lines = [line.strip() for line in f.readlines()]
+                positives = []
+                if "Positives paths:" in lines:
+                    start_idx = lines.index("Positives paths:") + 1
+                    positives = [l for l in lines[start_idx:] if l]
+                is_top1_correct = 1 if top1_path in positives else 0
+        except Exception:
+            # Fallback to path matching if distance computation fails
+            with open(txt_file, "r") as f:
+                lines = [line.strip() for line in f.readlines()]
+            positives = []
+            if "Positives paths:" in lines:
+                start_idx = lines.index("Positives paths:") + 1
+                positives = [l for l in lines[start_idx:] if l]
+            is_top1_correct = 1 if top1_path in positives else 0
 
         rows.append(
             {

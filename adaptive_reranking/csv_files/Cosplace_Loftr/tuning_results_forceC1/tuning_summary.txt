@@ -1,0 +1,45 @@
+================================================================================
+LR Hyperparameter Tuning Summary (Classification Accuracy Optimization)
+================================================================================
+
+NOTE: Threshold selection optimizes classification accuracy (how well LR predicts
+if top-1 is correct), not R@1. This is because validation sets like SF-XS val
+are often too easy, leading to threshold=0.0 (no re-ranking) when optimizing R@1.
+Classification accuracy better reflects the adaptive strategy's ability to
+distinguish easy vs hard queries. R@1 curves are still shown for analysis.
+
+CSV Folder: adaptive_reranking\csv_files\Cosplace_Loftr
+Validation Predictions: VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/2025-12-16_18-51-40/preds
+Validation Top-20 Inliers: VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/2025-12-16_18-51-40/preds_loftr_full20
+
+NOTE: Validation Set Analysis
+  Baseline (no re-ranking): 93.33% R@1
+  Full re-ranking: 91.82% R@1
+  WARNING: Validation set is very easy (high baseline R@1).
+           Optimal threshold may favor minimal re-ranking.
+           Re-ranking may help more on harder test sets.
+
+SUN Model:
+  Best C: 1.00
+  Best Threshold (optimized for classification accuracy): 0.15
+  Classification Accuracy at best threshold: 93.74%
+  R@1 at best threshold: 92.63%
+  Easy queries at best threshold: 7454 (93.3%)
+  Hard queries at best threshold: 539 (6.7%)
+
+NIGHT Model:
+  Best C: 1.00
+  Best Threshold (optimized for classification accuracy): 0.05
+  Classification Accuracy at best threshold: 93.64%
+  R@1 at best threshold: 93.27%
+  Easy queries at best threshold: 7848 (98.2%)
+  Hard queries at best threshold: 145 (1.8%)
+
+COMBINED Model:
+  Best C: 1.00
+  Best Threshold (optimized for classification accuracy): 0.10
+  Classification Accuracy at best threshold: 93.74%
+  R@1 at best threshold: 92.63%
+  Easy queries at best threshold: 7454 (93.3%)
+  Hard queries at best threshold: 539 (6.7%)
+

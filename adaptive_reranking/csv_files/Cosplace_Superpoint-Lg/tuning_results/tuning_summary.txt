@@ -1,0 +1,45 @@
+================================================================================
+LR Hyperparameter Tuning Summary (Classification Accuracy Optimization)
+================================================================================
+
+NOTE: Threshold selection optimizes classification accuracy (how well LR predicts
+if top-1 is correct), not R@1. This is because validation sets like SF-XS val
+are often too easy, leading to threshold=0.0 (no re-ranking) when optimizing R@1.
+Classification accuracy better reflects the adaptive strategy's ability to
+distinguish easy vs hard queries. R@1 curves are still shown for analysis.
+
+CSV Folder: adaptive_reranking\csv_files\Cosplace_Superpoint-Lg
+Validation Predictions: VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/2025-12-16_18-51-40/preds
+Validation Top-20 Inliers: VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/2025-12-16_18-51-40/preds_superpoint-lg_full20
+
+NOTE: Validation Set Analysis
+  Baseline (no re-ranking): 93.33% R@1
+  Full re-ranking: 91.29% R@1
+  WARNING: Validation set is very easy (high baseline R@1).
+           Optimal threshold may favor minimal re-ranking.
+           Re-ranking may help more on harder test sets.
+
+SUN Model:
+  Best C: 0.01
+  Best Threshold (optimized for classification accuracy): 0.00
+  Classification Accuracy at best threshold: 93.33%
+  R@1 at best threshold: 93.33%
+  Easy queries at best threshold: 7993 (100.0%)
+  Hard queries at best threshold: 0 (0.0%)
+
+NIGHT Model:
+  Best C: 0.01
+  Best Threshold (optimized for classification accuracy): 0.15
+  Classification Accuracy at best threshold: 93.57%
+  R@1 at best threshold: 92.38%
+  Easy queries at best threshold: 7386 (92.4%)
+  Hard queries at best threshold: 607 (7.6%)
+
+COMBINED Model:
+  Best C: 0.01
+  Best Threshold (optimized for classification accuracy): 0.20
+  Classification Accuracy at best threshold: 93.41%
+  R@1 at best threshold: 92.27%
+  Easy queries at best threshold: 7327 (91.7%)
+  Hard queries at best threshold: 666 (8.3%)
+
