@@ -1,0 +1,98 @@
+\documentclass[10pt]{article}
+
+% Packages
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+\title{Adaptive Reranking for Visual Place Recognition}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{table}[t]
+\centering
+\caption{Comparison of CosPlace baseline, Adaptive Reranking (logistic-regression-based), and Full Reranking across four VPR benchmarks. We report Top-1 accuracy (\%) and reranking time (minutes).}
+\label{tab:adaptive_vs_full}
+
+\resizebox{\linewidth}{!}{
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Dataset} & \textbf{CosPlace} & \textbf{Adaptive Rerank} & \textbf{Full Rerank} & \textbf{Time (A / F)} \\
+\midrule
+SF-XS-test       & 70.0 & 78.0 & \textbf{81.3} & 10 / 39 \\
+SVOX-test-sun    & 73.0 & 87.0 & \textbf{90.1} & 9 / 32 \\
+SVOX-test-night  & 49.0 & 72.0 & \textbf{73.5} & 17 / 31 \\
+Tokyo-test       & 70.0 & 84.0 & \textbf{85.7} & 4 / 12 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\section{Analysis of Adaptive Reranking}
+
+Table~\ref{tab:adaptive_vs_full} presents the performance of our logistic-regression-based
+adaptive reranking module compared to the CosPlace baseline and the full reranking pipeline.
+
+\subsection{Accuracy Improvements}
+
+Adaptive reranking consistently improves over the CosPlace baseline across all datasets.
+The gains are substantial:
+\begin{itemize}
+    \item SF-XS-test: +8.0\%
+    \item SVOX-test-sun: +14.0\%
+    \item SVOX-test-night: +23.0\%
+    \item Tokyo-test: +14.0\%
+\end{itemize}
+
+These results demonstrate that even a lightweight learned reranker can correct many of the
+baseline retrieval errors, particularly under challenging conditions such as nighttime imagery.
+
+\subsection{Comparison to Full Reranking}
+
+Adaptive reranking recovers the majority of the performance of the full reranking pipeline.
+The remaining gap is small:
+\begin{itemize}
+    \item SF-XS-test: 3.3\% behind full reranking
+    \item SVOX-test-sun: 3.1\% behind
+    \item SVOX-test-night: 1.5\% behind
+    \item Tokyo-test: 1.7\% behind
+\end{itemize}
+
+This shows that the logistic regression model captures most of the geometric consistency
+signals used by the full reranking stage.
+
+\subsection{Computational Efficiency}
+
+Adaptive reranking is significantly faster than full reranking:
+\begin{itemize}
+    \item SF-XS-test: 3.9$\times$ faster
+    \item SVOX-test-sun: 3.5$\times$ faster
+    \item SVOX-test-night: 1.8$\times$ faster
+    \item Tokyo-test: 3.0$\times$ faster
+\end{itemize}
+
+This makes adaptive reranking suitable for real-time or large-scale VPR deployments where
+full reranking is computationally prohibitive.
+
+\subsection{Nighttime Robustness}
+
+The largest relative improvement occurs on SVOX-test-night (+23\%), indicating that the
+logistic regression model is particularly effective under severe illumination changes.
+This suggests that the reranker learns discriminative geometric cues that remain stable
+even when appearance-based descriptors degrade.
+
+\section{Summary}
+
+Overall, adaptive reranking provides an excellent trade-off between accuracy and
+computational cost. It consistently boosts Top-1 accuracy over the CosPlace baseline while
+remaining significantly faster than full reranking. These results demonstrate that a simple
+learned reranker can approximate the performance of a full geometric verification pipeline
+at a fraction of the computational cost.
+
+\end{document}
