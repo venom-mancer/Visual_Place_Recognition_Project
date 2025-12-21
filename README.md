@@ -85,11 +85,11 @@ This project implements **Adaptive Re-ranking for Visual Place Recognition** - a
 
 ### Quick Links
 
-- **[📖 Project Overview](docs/PROJECT_OVERVIEW.md)** - Complete project introduction, achievements, and quick start guide
-- **[🔄 Pipeline Guide](docs/PIPELINE_GUIDE.md)** - Step-by-step pipeline walkthrough (Stages 1-6)
-- **[🔬 Methodology](docs/METHODOLOGY.md)** - Different approaches: Regressor vs Logistic Regression
-- **[📊 Results](docs/RESULTS.md)** - Complete experimental results across all test datasets
-- **[🛠️ Technical Details](docs/TECHNICAL_DETAILS.md)** - Implementation details, fixes, and feature engineering
+- **[📖 Project Overview](docs/01_PROJECT_OVERVIEW.md)** - Complete project introduction, achievements, and quick start guide
+- **[🔄 Pipeline Guide](docs/02_PIPELINE_GUIDE.md)** - Step-by-step pipeline walkthrough (Stages 1-6)
+- **[🔬 Methodology](docs/03_METHODOLOGY.md)** - Different approaches: Regressor vs Logistic Regression
+- **[📊 Results](docs/04_RESULTS.md)** - Complete experimental results across all test datasets
+- **[🛠️ Technical Details](docs/05_TECHNICAL_DETAILS.md)** - Implementation details, fixes, and feature engineering
 
 ### Key Results
 
@@ -105,7 +105,7 @@ This project implements **Adaptive Re-ranking for Visual Place Recognition** - a
 
 ## 🚀 Quick Start
 
-See [Project Overview](docs/PROJECT_OVERVIEW.md) for detailed quick start guide.
+See [Project Overview](docs/01_PROJECT_OVERVIEW.md) for detailed quick start guide.
 
 ---
 

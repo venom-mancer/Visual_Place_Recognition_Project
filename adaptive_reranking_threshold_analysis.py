@@ -40,6 +40,9 @@ def load_feature_file(path: str) -> dict:
         result["top1_top3_ratio"] = data["top1_top3_ratio"].astype("float32")
         result["top2_top3_ratio"] = data["top2_top3_ratio"].astype("float32")
         result["geographic_clustering"] = data["geographic_clustering"].astype("float32")
+    # Add inliers if available (9th feature)
+    if "num_inliers_top1" in data:
+        result["num_inliers_top1"] = data["num_inliers_top1"].astype("float32")
     return result
 
 
@@ -151,6 +154,7 @@ def analyze_thresholds_for_dataset(
     model = bundle["model"]
     scaler = bundle["scaler"]
     feature_names = bundle["feature_names"]
+    target_type = bundle.get("target_type", "hard_score")
     
     # Load features
     features = load_feature_file(str(feature_path))
@@ -165,21 +169,31 @@ def analyze_thresholds_for_dataset(
     
     # Scale and predict
     X_scaled = scaler.transform(X)
-    probs = model.predict_proba(X_scaled)[:, 1]  # Probability of being easy
+    # Convention:
+    # - hard_score models: probs = P(hard) where hard=wrong/difficult, class 1 = hard
+    # - easy_score models: probs = P(easy) where easy=correct/easy, class 1 = easy
+    probs = model.predict_proba(X_scaled)[:, 1]
     
     num_queries = len(probs)
     print(f"Total queries: {num_queries}")
     print(f"Probability range: [{probs.min():.3f}, {probs.max():.3f}]")
     print(f"Mean probability: {probs.mean():.3f}")
+    print(f"Model target_type: {target_type} (probs are P(class=1))")
     print(f"Testing {len(thresholds)} thresholds...\n")
     
     # Test each threshold
     results = []
     
     for threshold in tqdm(thresholds, desc=f"Testing thresholds for {dataset_name}"):
-        # Classify queries
-        is_easy = probs >= threshold
-        is_hard = ~is_easy
+        # Classify queries based on model type
+        if target_type == "hard_score":
+            # If P(hard) >= threshold → hard (apply re-ranking)
+            is_hard = probs >= threshold
+            is_easy = ~is_hard
+        else:
+            # If P(easy) >= threshold → easy (skip re-ranking)
+            is_easy = probs >= threshold
+            is_hard = ~is_easy
         
         hard_query_rate = is_hard.mean()
         cost_savings = is_easy.mean()  # Percentage of queries that skip image matching

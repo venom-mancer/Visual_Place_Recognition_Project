@@ -176,8 +176,18 @@ cython_debug/
 # Project-specific ignores
 data/
 logs/
+log_*/
 wandb/
 *.tmp
 temp/
 .temp/
 tmp/
+
+# Generated artifacts (kept out of git; repo may still track some README.md files)
+output_stages/**
+!output_stages/**/README.md
+models*/
+trained_models*/
+*.pkl
+*.torch
+*.npz

@@ -1,11 +1,10 @@
 """
-Stage 3 (Improved): Train Logistic Regression to predict EASY queries with optimal threshold.
+Stage 3 (Improved): Train Logistic Regression to predict HARD queries with an optimal threshold.
 
-This version:
-- Predicts "easy" queries (label = 1 if correct, 0 if wrong)
-- Uses 8 improved features (available before image matching)
-- Automatically finds optimal threshold on validation set
-- No hard thresholding - threshold is learned/optimized
+This script trains a binary classifier where:
+- Target: hard_score (1 = hard/wrong, 0 = easy/correct), derived from Top-1 correctness
+- Features: retrieval-only features available before image matching, plus optional inliers feature
+- Threshold: selected on the validation set by maximizing either F1 or Recall (configurable)
 """
 
 import argparse
@@ -34,13 +33,16 @@ def load_feature_file(path: str) -> dict:
         result["top1_top3_ratio"] = data["top1_top3_ratio"].astype("float32")
         result["top2_top3_ratio"] = data["top2_top3_ratio"].astype("float32")
         result["geographic_clustering"] = data["geographic_clustering"].astype("float32")
+    # Add inliers if available (9th feature)
+    if "num_inliers_top1" in data:
+        result["num_inliers_top1"] = data["num_inliers_top1"].astype("float32")
     return result
 
 
 def build_feature_matrix(features_dict: dict) -> tuple[np.ndarray, np.ndarray, list]:
     """
     Build (X, y) from a feature dictionary.
-    X: 8 improved features (available before image matching)
+    X: 8 improved features + num_inliers_top1 (9 features total)
     y: easy_score (1 = easy/correct, 0 = hard/wrong) - Top-1 correctness
     """
     top1_distance = features_dict["top1_distance"]
@@ -55,29 +57,35 @@ def build_feature_matrix(features_dict: dict) -> tuple[np.ndarray, np.ndarray, l
         top2_top3_ratio = features_dict["top2_top3_ratio"]
         geographic_clustering = features_dict["geographic_clustering"]
         
-        X = np.stack(
-            [top1_distance, peakiness, sue_score,
-             topk_distance_spread, top1_top2_similarity,
-             top1_top3_ratio, top2_top3_ratio, geographic_clustering],
-            axis=1,
-        ).astype("float32")
+        feature_list = [
+            top1_distance, peakiness, sue_score,
+            topk_distance_spread, top1_top2_similarity,
+            top1_top3_ratio, top2_top3_ratio, geographic_clustering
+        ]
         feature_names = ["top1_distance", "peakiness", "sue_score",
                         "topk_distance_spread", "top1_top2_similarity",
                         "top1_top3_ratio", "top2_top3_ratio", "geographic_clustering"]
     else:
         # Fallback to 3 basic features
-        X = np.stack(
-            [top1_distance, peakiness, sue_score],
-            axis=1,
-        ).astype("float32")
+        feature_list = [top1_distance, peakiness, sue_score]
         feature_names = ["top1_distance", "peakiness", "sue_score"]
     
-    # Target: Easy score (1 = easy/correct, 0 = hard/wrong)
-    # This is Top-1 correctness: 1 = correct (within threshold), 0 = wrong (outside threshold)
-    labels = features_dict["labels"]  # 1 = correct, 0 = wrong
-    easy_score = labels.astype("float32")  # 1 = easy/correct, 0 = hard/wrong
+    # Add inliers as 9th feature if available
+    if "num_inliers_top1" in features_dict:
+        num_inliers_top1 = features_dict["num_inliers_top1"]
+        # Handle NaN/Inf
+        num_inliers_top1 = np.nan_to_num(num_inliers_top1, nan=0.0, posinf=0.0, neginf=0.0)
+        feature_list.append(num_inliers_top1)
+        feature_names.append("num_inliers_top1")
     
-    return X, easy_score, feature_names
+    X = np.stack(feature_list, axis=1).astype("float32")
+    
+    # Target: Hard score (1 = hard/wrong, 0 = easy/correct)
+    # This is Top-1 correctness flipped: 1 = wrong (outside threshold), 0 = correct (within threshold)
+    labels = features_dict["labels"]  # 1 = correct, 0 = wrong
+    hard_score = (1 - labels).astype("float32")  # 1 = hard/wrong, 0 = easy/correct
+    
+    return X, hard_score, feature_names
 
 
 def find_optimal_threshold(y_true, y_probs, method="f1"):
@@ -85,8 +93,8 @@ def find_optimal_threshold(y_true, y_probs, method="f1"):
     Find optimal threshold on validation set.
     
     Args:
-        y_true: True labels (1 = easy, 0 = hard)
-        y_probs: Predicted probabilities (probability of being easy)
+        y_true: True labels (1 = hard, 0 = easy)
+        y_probs: Predicted probabilities (probability of being hard)
         method: "f1" (maximize F1) or "recall" (target recall rate)
     
     Returns:
@@ -103,7 +111,7 @@ def find_optimal_threshold(y_true, y_probs, method="f1"):
         if method == "f1":
             score = f1_score(y_true, y_pred, zero_division=0)
         elif method == "recall":
-            # Target: maximize recall of easy queries (we want to catch all easy queries)
+            # Target: maximize recall of hard queries (we want to catch all hard queries)
             score = recall_score(y_true, y_pred, zero_division=0)
         else:
             raise ValueError(f"Unknown method: {method}")
@@ -130,14 +138,14 @@ def main(args):
     
     print(f"\nTraining logistic regression on {X_train.shape[0]} queries.")
     print(f"  Features: {', '.join(feature_names)} ({len(feature_names)} features)")
-    print(f"  Target: easy_score (1 = easy/correct, 0 = hard/wrong) - Top-1 correctness")
+    print(f"  Target: hard_score (1 = hard/wrong, 0 = easy/correct) - Top-1 correctness flipped")
     
     # Statistics
-    num_easy = y_train.sum()
-    num_hard = (1 - y_train).sum()
-    print(f"\nTarget (easy_score) statistics:")
-    print(f"  Easy queries (skip re-ranking): {int(num_easy)} ({100*num_easy/len(y_train):.1f}%)")
+    num_hard = y_train.sum()  # Now y_train is hard_score
+    num_easy = (1 - y_train).sum()
+    print(f"\nTarget (hard_score) statistics:")
     print(f"  Hard queries (apply re-ranking): {int(num_hard)} ({100*num_hard/len(y_train):.1f}%)")
+    print(f"  Easy queries (skip re-ranking): {int(num_easy)} ({100*num_easy/len(y_train):.1f}%)")
     
     # Scale features
     scaler = StandardScaler()
@@ -268,18 +276,18 @@ def main(args):
         print(f"  Recall: {val_recall:.4f}")
         print(f"  ROC-AUC: {val_roc_auc:.4f}")
         
-        # Show distribution
-        num_easy_pred = y_val_pred.sum()
-        num_hard_pred = (1 - y_val_pred).sum()
-        num_easy_actual = y_val.sum()
-        num_hard_actual = (1 - y_val).sum()
+        # Show distribution (y_val is now hard_score: 1 = hard, 0 = easy)
+        num_hard_pred = y_val_pred.sum()  # Predicted hard queries
+        num_easy_pred = (1 - y_val_pred).sum()  # Predicted easy queries
+        num_hard_actual = y_val.sum()  # Actual hard queries
+        num_easy_actual = (1 - y_val).sum()  # Actual easy queries
         
         print(f"\nValidation predictions (threshold {optimal_threshold:.3f}):")
-        print(f"  Easy queries (predicted): {num_easy_pred} ({100*num_easy_pred/len(y_val):.1f}%)")
         print(f"  Hard queries (predicted): {num_hard_pred} ({100*num_hard_pred/len(y_val):.1f}%)")
+        print(f"  Easy queries (predicted): {num_easy_pred} ({100*num_easy_pred/len(y_val):.1f}%)")
         print(f"\nActual distribution:")
-        print(f"  Easy queries (actual): {num_easy_actual} ({100*num_easy_actual/len(y_val):.1f}%)")
-        print(f"  Hard queries (actual): {num_hard_actual} ({100*num_hard_actual/len(y_val):.1f}%)")
+        print(f"  Hard queries (actual): {int(num_hard_actual)} ({100*num_hard_actual/len(y_val):.1f}%)")
+        print(f"  Easy queries (actual): {int(num_easy_actual)} ({100*num_easy_actual/len(y_val):.1f}%)")
     
     # Save model
     model_bundle = {
@@ -288,7 +296,8 @@ def main(args):
         "feature_names": feature_names,
         "optimal_threshold": optimal_threshold,
         "threshold_method": args.threshold_method,
-        "target_type": "easy_score",  # Predict easy queries
+        # This model predicts hard_score (probability of being hard/wrong)
+        "target_type": "hard_score",
         "optimal_C": optimal_C,  # Save the tuned C value
     }
     
@@ -301,7 +310,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Train logistic regression to predict EASY queries with optimal threshold"
+        description="Train logistic regression to predict HARD queries with optimal threshold"
     )
     parser.add_argument(
         "--train-features",

@@ -1,11 +1,11 @@
 """
-Stage 4 (Improved): Apply Logistic Regression to predict EASY queries.
+Stage 4 (Improved): Apply Logistic Regression to predict HARD queries.
 
 This version:
-- Predicts "easy" queries (probability of being easy/correct)
+- Predicts "hard" queries (probability of being hard/wrong)
 - Supports dataset-specific threshold calibration
 - Can use saved threshold OR calibrate on test set
-- Skips re-ranking for easy queries
+- Applies re-ranking for hard queries
 """
 
 import argparse
@@ -31,6 +31,11 @@ def load_feature_file(path: str) -> dict:
         result["top1_top3_ratio"] = data["top1_top3_ratio"].astype("float32")
         result["top2_top3_ratio"] = data["top2_top3_ratio"].astype("float32")
         result["geographic_clustering"] = data["geographic_clustering"].astype("float32")
+    
+    # Add inliers if available (9th feature)
+    if "num_inliers_top1" in data:
+        result["num_inliers_top1"] = data["num_inliers_top1"].astype("float32")
+    
     return result
 
 
@@ -53,8 +58,8 @@ def find_optimal_threshold(y_true, y_probs, method="f1", target_rate=None):
     Find optimal threshold on test set.
     
     Args:
-        y_true: True labels (1 = easy, 0 = hard)
-        y_probs: Predicted probabilities (probability of being easy)
+        y_true: True labels (1 = hard, 0 = easy)
+        y_probs: Predicted probabilities (probability of being hard)
         method: "f1" (maximize F1), "recall" (target recall), or "rate" (target hard query rate)
         target_rate: Target hard query rate (0.0-1.0) if method="rate"
     
@@ -67,7 +72,7 @@ def find_optimal_threshold(y_true, y_probs, method="f1", target_rate=None):
     best_score = 0.0
     
     for threshold in thresholds:
-        y_pred = (y_probs >= threshold).astype(int)
+        y_pred = (y_probs >= threshold).astype(int)  # 1 = hard, 0 = easy
         
         if method == "f1":
             score = f1_score(y_true, y_pred, zero_division=0)
@@ -75,7 +80,7 @@ def find_optimal_threshold(y_true, y_probs, method="f1", target_rate=None):
             score = recall_score(y_true, y_pred, zero_division=0)
         elif method == "rate":
             # Target hard query rate (percentage of queries predicted as hard)
-            hard_rate = (y_pred == 0).mean()  # 0 = hard
+            hard_rate = y_pred.mean()  # 1 = hard
             score = 1.0 - abs(hard_rate - target_rate)  # Closer to target = better
         else:
             raise ValueError(f"Unknown method: {method}")
@@ -95,11 +100,12 @@ def main(args):
     feature_names = bundle["feature_names"]
     saved_threshold = bundle.get("optimal_threshold", 0.5)
     threshold_method = bundle.get("threshold_method", "f1")
-    target_type = bundle.get("target_type", "easy_score")
+    # This project uses "hard_score" models by default (1 = hard/wrong, 0 = easy/correct).
+    target_type = bundle.get("target_type", "hard_score")
     
     print(f"Loaded model: {args.model_path}")
     print(f"  Features: {', '.join(feature_names)} ({len(feature_names)} features)")
-    print(f"  Target: {target_type} (1 = easy/correct, 0 = hard/wrong)")
+    print(f"  Target: {target_type} (1 = hard/wrong, 0 = easy/correct)")
     print(f"  Saved threshold: {saved_threshold:.3f} (method: {threshold_method})")
     
     # Load features
@@ -115,13 +121,13 @@ def main(args):
     
     # Scale and predict
     X_scaled = scaler.transform(X)
-    probs = model.predict_proba(X_scaled)[:, 1]  # Probability of being easy
+    probs = model.predict_proba(X_scaled)[:, 1]  # Probability of being hard
     
     # Determine which threshold to use
     if args.calibrate_threshold and "labels" in features:
         # Calibrate threshold on test set (if labels available)
         labels = features["labels"][valid_mask].astype("float32")
-        easy_score = labels  # 1 = easy/correct, 0 = hard/wrong
+        hard_score = (1 - labels).astype("float32")  # 1 = hard/wrong, 0 = easy/correct
         
         print(f"\n{'='*70}")
         print(f"Calibrating threshold on test set...")
@@ -131,7 +137,7 @@ def main(args):
             # Target-based calibration: achieve specific hard query rate
             target_rate = args.target_hard_rate
             optimal_threshold, achieved_rate = find_optimal_threshold(
-                easy_score, probs, method="rate", target_rate=target_rate
+                hard_score, probs, method="rate", target_rate=target_rate
             )
             print(f"  Method: Target hard query rate ({target_rate*100:.1f}%)")
             print(f"  Optimal threshold: {optimal_threshold:.3f}")
@@ -139,11 +145,11 @@ def main(args):
         else:
             # F1-based calibration: maximize F1-score
             optimal_threshold, best_f1 = find_optimal_threshold(
-                easy_score, probs, method="f1"
+                hard_score, probs, method="f1"
             )
             y_pred = (probs >= optimal_threshold).astype(int)
-            precision = precision_score(easy_score, y_pred, zero_division=0)
-            recall = recall_score(easy_score, y_pred, zero_division=0)
+            precision = precision_score(hard_score, y_pred, zero_division=0)
+            recall = recall_score(hard_score, y_pred, zero_division=0)
             
             print(f"  Method: Maximize F1-score")
             print(f"  Optimal threshold: {optimal_threshold:.3f}")
@@ -161,9 +167,9 @@ def main(args):
             print(f"\n⚠️  Warning: Cannot calibrate threshold - labels not available in feature file")
             print(f"  Using saved threshold: {optimal_threshold:.3f}")
     
-    # Apply threshold
-    is_easy = probs >= optimal_threshold
-    is_hard = ~is_easy
+    # Apply threshold (probs is now probability of being hard)
+    is_hard = probs >= optimal_threshold  # If P(hard) >= threshold → Hard
+    is_easy = ~is_hard                    # If P(hard) < threshold → Easy
     
     num_queries = len(probs)
     num_easy = is_easy.sum()
@@ -187,6 +193,9 @@ def main(args):
     if "labels" in features:
         save_dict["labels"] = features["labels"][valid_mask].astype("float32")
         # Compute accuracy if labels available
+        # labels: 1 = correct, 0 = wrong
+        # is_easy: True = easy, False = hard
+        # So: is_easy should match (labels == 1)
         accuracy = (is_easy.astype(int) == save_dict["labels"]).mean()
         save_dict["accuracy"] = accuracy
     
@@ -206,15 +215,15 @@ def main(args):
     
     # Print summary
     print(f"\n{'='*70}")
-    print(f"Query Detection (BEFORE Image Matching) - LOGISTIC REGRESSION (EASY)")
+    print(f"Query Detection (BEFORE Image Matching) - LOGISTIC REGRESSION (HARD)")
     print(f"{'='*70}")
     print(f"Processed {num_queries} queries using {len(feature_names)} retrieval features:")
     print(f"  - {', '.join(feature_names)}")
-    print(f"  - Model predicts: easy_score (probability of being easy/correct)")
+    print(f"  - Model predicts: hard_score (probability of being hard/wrong)")
     print(f"  - Threshold: {optimal_threshold:.3f} ({threshold_source})")
     print(f"\nPredictions:")
-    print(f"  Easy (predicted prob >= {optimal_threshold:.3f}, skip image matching): {num_easy} ({100*num_easy/num_queries:.1f}%)")
-    print(f"  Hard (predicted prob < {optimal_threshold:.3f}, apply image matching): {num_hard} ({100*num_hard/num_queries:.1f}%)")
+    print(f"  Hard (predicted P(hard) >= {optimal_threshold:.3f}, apply image matching): {num_hard} ({100*num_hard/num_queries:.1f}%)")
+    print(f"  Easy (predicted P(hard) < {optimal_threshold:.3f}, skip image matching): {num_easy} ({100*num_easy/num_queries:.1f}%)")
     print(f"\nPredicted probability statistics:")
     print(f"  Min: {probs.min():.3f}, Max: {probs.max():.3f}")
     print(f"  Mean: {probs.mean():.3f}, Median: {np.median(probs):.3f}")
@@ -231,7 +240,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Apply logistic regression to predict EASY queries with optional threshold calibration"
+        description="Apply logistic regression to predict HARD queries with optional threshold calibration"
     )
     parser.add_argument(
         "--model-path",
