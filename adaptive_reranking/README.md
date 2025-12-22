@@ -1,96 +1,111 @@
-Adaptive Re-Ranking (Extension 6.1)
+## Adaptive Re-Ranking (Extension 6.1)
 
-This folder implements an adaptive re-ranking strategy for Visual Place Recognition (VPR): run expensive image matching and re-ranking only on “hard” queries, while skipping it on “easy” queries to save compute.
+This folder contains the code + artifacts for **adaptive re-ranking** in VPR.
 
-## Overview (what “adaptive” means here)
+- **Goal**: save computation by running expensive image matching / re-ranking only when a query is likely “hard”.
+- **What we evaluated**: both **full (non-adaptive) re-ranking** and **adaptive re-ranking**, using **two VPR methods** and **two image matchers**, across the provided test sets.
 
-- **Retrieval stage** (VPR): produces top-K candidates per query (stored as `preds/*.txt` in `VPR-methods-evaluation/logs/...`).
-- **Matching stage** (image matcher): produces inlier counts between the query and retrieved candidates (stored as `preds_<matcher>/*.torch`).
-- **Decision model** (Logistic Regression): uses **`inliers_top1`** to predict how likely the retrieval top-1 is correct, and decides whether to re-rank.
+### Decision rule (matches the code)
 
-Decision rule:
-- **EASY** if \(P(\text{top1 correct} \mid \text{inliers\_top1}) \ge t\)  -> keep retrieval ranking (no extra matching)
-- **HARD** otherwise -> run matcher for top-K and re-rank by inliers
+We train a Logistic Regression classifier on a single feature:
+- **feature**: `inliers_top1` = number of inliers between the query and the retrieval top‑1 candidate
 
-## What’s in this folder
+The LR outputs:
+- \(P(\text{top1 correct}\mid x)\) where \(x = \text{inliers\_top1}\)
 
-- **`build_lr_dataset.py`**: builds LR datasets (CSV) from `preds/*.txt` + top-1 inliers (`*.torch`), with:
-  - **feature**: `inliers_top1`
-  - **label**: `is_top1_correct` (computed by distance <= 25m; falls back to positives list if needed)
-- **`build_all_training_csvs.py`**: convenience wrapper that builds **three** SVOX-train CSVs (sun, night, combined) into `csv_files/<Combo>/`.
-- **`tune_lr_hyperparameters.py`**: trains 3 LR models (sun/night/combined), tunes `C` and selects decision threshold `t` on the validation set, and saves:
-  - `lr_model_{sun,night,combined}_C*.pkl`
-  - `threshold_vs_r1_plot.png`
-  - `tuning_summary.txt`
-- **`adaptive_reranking_eval.py`**: evaluates the adaptive strategy on a single test set (does on-the-fly matching for HARD queries only).
-- **`batch_eval_combo.py`**: runs `adaptive_reranking_eval.py` for a single combo across multiple datasets and LR models, writing `summary.csv`, `summary.txt`, and `raw.log`.
+Then:
+- **EASY** if \(P(\text{top1 correct}\mid x) \ge t\) -> **don’t re-rank**
+- **HARD** otherwise -> **re-rank**
 
-## Folder structure (current)
+Note: we do **not** choose \(t\) from the test set. We choose \(t\) on validation, then apply it to test sets. The **%easy/%hard on each test set** is what reflects each dataset’s inlier distribution.
 
-The main working area is `csv_files/<ComboName>/` (one folder per VPR+matcher combo). Example layout:
+## Folder map (complete)
 
 ```
 adaptive_reranking/
+  README.md
+  build_lr_dataset.py              # build CSV rows (inliers_top1, is_top1_correct)
+  build_all_training_csvs.py       # build 3 train CSVs (sun, night, combined)
+  tune_lr_hyperparameters.py       # tune LR (C + decision threshold), save models + plots
+  adaptive_reranking_eval.py       # evaluate adaptive strategy on a single dataset
+  batch_eval_combo.py              # batch-eval a combo: writes summary.csv/summary.txt/raw.log
+  train_lr_from_csv.py             # optional: plain LR training (not used by main pipeline)
   csv_files/
-    Cosplace_Loftr/
-      lr_data_..._svox_train_sun.csv
-      lr_data_..._svox_train_night.csv
-      lr_data_..._svox_train.csv
-      lr_data_..._sf_xs_val.csv
+    <OneFolderPerVPR+Matcher>/
+      lr_data_*_svox_train_sun.csv
+      lr_data_*_svox_train_night.csv
+      lr_data_*_svox_train.csv
+      lr_data_*_sf_xs_val.csv
       tuning_results/
         lr_model_sun_C*.pkl
         lr_model_night_C*.pkl
         lr_model_combined_C*.pkl
         threshold_vs_r1_plot.png
         tuning_summary.txt
-      tuning_results_forceC1/            # optional (when using --force-C 1)
       batch_eval_YYYYMMDD_HHMMSS/
         summary.csv
         summary.txt
         raw.log
 ```
 
-## End-to-end pipeline (runbook)
+## Example (one combo end-to-end)
 
-The pipeline has 5 building blocks. All paths below assume you’re in the **project root**, unless stated otherwise.
+Below is a **single worked example** (pick one combo and follow it end-to-end). You can repeat the same steps for the other method/matcher choices by changing `--method` and `--matcher` and the `logs_*` names.
 
-### 1) Run VPR to generate `preds/` (outside this folder)
+### Conventions
 
-Run from `VPR-methods-evaluation/` to generate `logs/<log_dir>/<timestamp>/preds`:
+- Run these from **`VPR-methods-evaluation/`**:
+  - `python main.py ...`
+  - `python ..\match_queries_preds.py ...`
+  - `python ..\reranking.py ...`
+- Run these from the **project root**:
+  - `python adaptive_reranking\...`
+
+### A) Full pipeline (non-adaptive re-ranking)
+
+1) **Run VPR retrieval** (produces `preds/*.txt`):
 
 ```powershell
 cd VPR-methods-evaluation
 python main.py --method=cosplace --backbone=ResNet50 --descriptors_dimension=512 --image_size 512 512 `
-  --database_folder ../data/sf_xs/val/database `
-  --queries_folder  ../data/sf_xs/val/queries `
+  --database_folder ../data/sf_xs/test/database `
+  --queries_folder  ../data/sf_xs/test/queries `
   --num_preds_to_save 20 --recall_values 1 5 10 20 `
-  --log_dir logs_cosplace_sf_xs_val
+  --log_dir logs_example_sf_xs_test
 ```
 
-### 2) Compute matcher inliers (`match_queries_preds.py`)
-
-Run from `VPR-methods-evaluation/`.
-
-- **Top-1 only** (needed for LR decision + CSV building):
+2) **Compute top‑20 inliers** (matcher run for K=20):
 
 ```powershell
 cd VPR-methods-evaluation
-python ..\match_queries_preds.py --preds-dir logs/logs_cosplace_sf_xs_val/<timestamp>/preds `
-  --matcher loftr --device cuda --im-size 512 --num-preds 1
-```
-
-- **Top-20** (needed for full re-ranking and for threshold analysis on val):
-
-```powershell
-cd VPR-methods-evaluation
-python ..\match_queries_preds.py --preds-dir logs/logs_cosplace_sf_xs_val/<timestamp>/preds `
-  --out-dir  logs/logs_cosplace_sf_xs_val/<timestamp>/preds_loftr_full20 `
+python ..\match_queries_preds.py `
+  --preds-dir logs/logs_example_sf_xs_test/<timestamp>/preds `
+  --out-dir   logs/logs_example_sf_xs_test/<timestamp>/preds_loftr_full20 `
   --matcher loftr --device cuda --im-size 512 --num-preds 20
 ```
 
-### 3) Build LR CSVs
+3) **Full re-ranking** (re-rank every query):
 
-- **Training CSVs** (SVOX train sun/night/combined) in one command:
+```powershell
+cd VPR-methods-evaluation
+python ..\reranking.py `
+  --preds-dir   logs\logs_example_sf_xs_test\<timestamp>\preds `
+  --inliers-dir logs\logs_example_sf_xs_test\<timestamp>\preds_loftr_full20 `
+  --num-preds 20 --matcher loftr --vpr-method cosplace
+```
+
+### B) Adaptive pipeline (LR decides whether to re-rank)
+
+1) **Compute top‑1 inliers** (cheap, used only for the LR decision):
+
+```powershell
+cd VPR-methods-evaluation
+python ..\match_queries_preds.py `
+  --preds-dir logs/logs_example_sf_xs_test/<timestamp>/preds `
+  --matcher loftr --device cuda --im-size 512 --num-preds 1
+```
+
+2) **Build training CSVs** (SVOX train sun/night/combined):
 
 ```powershell
 python adaptive_reranking\build_all_training_csvs.py `
@@ -103,7 +118,7 @@ python adaptive_reranking\build_all_training_csvs.py `
   --output-dir csv_files
 ```
 
-- **Validation CSV** (SF-XS val) using top-1 inliers:
+3) **Build validation CSV** (SF‑XS val, also needs top‑1 inliers):
 
 ```powershell
 python adaptive_reranking\build_lr_dataset.py `
@@ -115,96 +130,35 @@ python adaptive_reranking\build_lr_dataset.py `
   --matcher-method loftr
 ```
 
-### 4) Tune LR models + decision threshold on validation
-
-This script expects that inside `--csv-folder` you have:
-- `*_svox_train_sun.csv`, `*_svox_train_night.csv`, `*_svox_train.csv`
-- `*_sf_xs_val.csv`
-
-Run:
+4) **Tune LR + choose threshold on validation** (also needs validation top‑20 inliers):
 
 ```powershell
 python adaptive_reranking\tune_lr_hyperparameters.py `
   --csv-folder adaptive_reranking/csv_files/Cosplace_Loftr `
-  --val-preds-dir        VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/<timestamp>/preds `
+  --val-preds-dir         VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/<timestamp>/preds `
   --val-top20-inliers-dir VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/<timestamp>/preds_loftr_full20
 ```
 
-Outputs are written to `adaptive_reranking/csv_files/Cosplace_Loftr/tuning_results/` by default.
-
-Optional: force a specific `C` (useful for ablations):
-
-```powershell
-python adaptive_reranking\tune_lr_hyperparameters.py `
-  --csv-folder adaptive_reranking/csv_files/Cosplace_Loftr `
-  --val-preds-dir        VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/<timestamp>/preds `
-  --val-top20-inliers-dir VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/<timestamp>/preds_loftr_full20 `
-  --force-C 1.0 `
-  --output-dir adaptive_reranking/csv_files/Cosplace_Loftr/tuning_results_forceC1
-```
-
-### 5) Evaluate adaptive re-ranking on test sets
-
-Run from `VPR-methods-evaluation/` (important on Windows; see notes below):
+5) **Run adaptive evaluation on SF‑XS test**:
 
 ```powershell
 cd VPR-methods-evaluation
 python ..\adaptive_reranking\adaptive_reranking_eval.py `
-  --preds-dir logs\logs_cosplace_sf_xs_test\<timestamp>\preds `
-  --top1-inliers-dir logs\logs_cosplace_sf_xs_test\<timestamp>\preds_loftr `
+  --preds-dir logs\logs_example_sf_xs_test\<timestamp>\preds `
+  --top1-inliers-dir logs\logs_example_sf_xs_test\<timestamp>\preds_loftr `
   --lr-model ..\adaptive_reranking\csv_files\Cosplace_Loftr\tuning_results\lr_model_combined_C0.01.pkl `
   --num-preds 20 --matcher loftr --device cuda --im-size 512
 ```
 
-This reports:
-- adaptive Recall@N (`recall@1`, `recall@5`, `recall@10`, `recall@20`)
-- % easy / % hard
-- matching cost (`avg_total_pairs_incl_top1` and totals)
-- runtimes
+## Tuning objective (what the script actually optimizes)
 
-## Batch evaluation (recommended)
+`tune_lr_hyperparameters.py` does:
+- **Selects `C`** by maximizing **ROC-AUC** on the validation CSV.
+- **Selects threshold `t`** by maximizing **classification accuracy** of the easy/hard decision on validation.
 
-If you have 3 LR models in a tuning folder (`lr_model_{sun,night,combined}_*.pkl`), you can evaluate the combo across datasets with one command:
+It still plots **Threshold vs R@1** for analysis and reporting, but the selected threshold is not chosen by maximizing R@1 (SF‑XS val is often very easy).
 
-```powershell
-python adaptive_reranking\batch_eval_combo.py `
-  --combo-name "Cosplace+Loftr" `
-  --matcher loftr `
-  --lr-models-dir adaptive_reranking/csv_files/Cosplace_Loftr/tuning_results `
-  --sf-xs-test-preds   VPR-methods-evaluation/logs/logs_cosplace_sf_xs_test/<timestamp>/preds `
-  --tokyo-xs-test-preds VPR-methods-evaluation/logs/logs_cosplace_tokyo_xs_test/<timestamp>/preds `
-  --svox-sun-test-preds  VPR-methods-evaluation/logs/logs_cosplace_svox_test_sun/<timestamp>/preds `
-  --svox-night-test-preds VPR-methods-evaluation/logs/logs_cosplace_svox_test_night/<timestamp>/preds
-```
+## Windows note (important)
 
-It will create a new `batch_eval_YYYYMMDD_HHMMSS/` folder next to `--lr-models-dir` and write:
-- `summary.csv`: easy to paste into Excel
-- `summary.txt`: readable table
-- `raw.log`: full logs for all sub-runs
-
-## How tuning works (what is optimized)
-
-`tune_lr_hyperparameters.py` does two separate selections:
-
-- **Best `C`**: selected on validation via **ROC-AUC** of predicting `is_top1_correct` from `inliers_top1`.
-- **Best threshold `t`**: selected on validation by maximizing **classification accuracy** of the easy/hard decision, i.e. whether the LR decision matches the ground-truth “top-1 correct?” label.
-
-The script still produces a **Threshold vs R@1** plot on validation, because the project writeup asks for dataset-based threshold analysis. The chosen threshold is simply not selected by maximizing R@1 (SF-XS val is often too easy and can lead to degenerate thresholds if you optimize R@1 directly).
-
-## Windows notes / common issues
-
-- **Run eval from `VPR-methods-evaluation/`**: many `preds/*.txt` files contain relative paths, so running `adaptive_reranking_eval.py` from elsewhere can trigger file-not-found errors.
-- **If you only have `*_full20`**: you can use it as the top-1 source too (top-1 is just index 0).
-  - For CLI eval: set `--top1-inliers-dir` to the same `preds_<matcher>_full20` folder.
-  - For batch eval: it expects a `preds_<matcher>` folder to exist; easiest workaround is to copy it:
-
-```powershell
-robocopy "...\preds_superpoint-lg_full20" "...\preds_superpoint-lg" /E
-```
-
-## Dependencies
-
-- `util.py` and `setup_temp_dir.py` live in the project root (imported by these scripts).
-- Matchers are loaded via the local `image-matching-models/` package.
-- Python deps: `torch`, `numpy`, `pandas`, `scikit-learn`, `matplotlib`, `joblib`, `tqdm`, `wandb` (optional).
+Run evaluation from `VPR-methods-evaluation/` so that paths inside `preds/*.txt` resolve correctly on Windows.
 
