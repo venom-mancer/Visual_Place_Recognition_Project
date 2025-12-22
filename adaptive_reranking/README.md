@@ -35,7 +35,7 @@ adaptive_reranking/
   build_all_training_csvs.py       # wrapper: calls build_lr_dataset.py 3x to build train CSVs (sun, night, combined)
   tune_lr_hyperparameters.py       # tune LR (C + decision threshold), save models + plots
   adaptive_reranking_eval.py       # evaluate adaptive strategy on a single dataset
-  batch_eval_combo.py              # batch-eval a combo: writes summary.csv/summary.txt/raw.log
+  batch_eval_combo.py              # wrapper: calls adaptive_reranking_eval.py for 3 LR models x 4 test sets, writes summary.csv/summary.txt/raw.log
   csv_files/
     <OneFolderPerVPR+Matcher>/
       lr_data_*_svox_train_sun.csv
