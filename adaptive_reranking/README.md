@@ -3,7 +3,14 @@
 This folder contains the code + artifacts for **adaptive re-ranking** in VPR.
 
 - **Goal**: save computation by running expensive image matching / re-ranking only when a query is likely “hard”.
-- **What we evaluated**: both **full (non-adaptive) re-ranking** and **adaptive re-ranking**, using **two VPR methods** and **two image matchers**, across the provided test sets.
+- **What we evaluated**: both **full (non-adaptive) re-ranking** and **adaptive re-ranking**, using **two VPR methods** and **two image matchers** (i.e., **4 VPR+matcher combinations**), across the provided test sets.
+
+## Pipeline order (per VPR+matcher combination)
+
+- Compute **top‑1 inliers** for **train + val + test**
+- Build **3 training CSVs** (`svox_train_sun`, `svox_train_night`, `combined`) + **1 validation CSV** (`sf_xs_val`)
+- Run `tune_lr_hyperparameters.py` -> saves **3 LR models** (`sun` / `night` / `combined`)
+- Evaluate those 3 LR models on the **4 test datasets** (so **12 runs** total), typically via `batch_eval_combo.py`
 
 ### Decision rule
 
@@ -25,11 +32,10 @@ Note: we do **not** choose `t` from the test set. We choose `t` on validation, t
 adaptive_reranking/
   README.md
   build_lr_dataset.py              # build CSV rows (inliers_top1, is_top1_correct)
-  build_all_training_csvs.py       # build 3 train CSVs (sun, night, combined)
+  build_all_training_csvs.py       # wrapper: calls build_lr_dataset.py 3x to build train CSVs (sun, night, combined)
   tune_lr_hyperparameters.py       # tune LR (C + decision threshold), save models + plots
   adaptive_reranking_eval.py       # evaluate adaptive strategy on a single dataset
   batch_eval_combo.py              # batch-eval a combo: writes summary.csv/summary.txt/raw.log
-  train_lr_from_csv.py             # optional: plain LR training (not used by main pipeline)
   csv_files/
     <OneFolderPerVPR+Matcher>/
       lr_data_*_svox_train_sun.csv
