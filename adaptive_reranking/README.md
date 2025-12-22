@@ -1,412 +1,210 @@
-# Adaptive Re-Ranking with Logistic Regression
+Adaptive Re-Ranking (Extension 6.1)
 
-This folder contains all scripts and data for **Extension 6.1: Adaptive Re-Ranking** using Logistic Regression to decide when to apply expensive image matching and re-ranking.
+This folder implements an adaptive re-ranking strategy for Visual Place Recognition (VPR): run expensive image matching and re-ranking only on “hard” queries, while skipping it on “easy” queries to save compute.
 
-## 📁 Folder Structure
+## Overview (what “adaptive” means here)
+
+- **Retrieval stage** (VPR): produces top-K candidates per query (stored as `preds/*.txt` in `VPR-methods-evaluation/logs/...`).
+- **Matching stage** (image matcher): produces inlier counts between the query and retrieved candidates (stored as `preds_<matcher>/*.torch`).
+- **Decision model** (Logistic Regression): uses **`inliers_top1`** to predict how likely the retrieval top-1 is correct, and decides whether to re-rank.
+
+Decision rule:
+- **EASY** if \(P(\text{top1 correct} \mid \text{inliers\_top1}) \ge t\)  -> keep retrieval ranking (no extra matching)
+- **HARD** otherwise -> run matcher for top-K and re-rank by inliers
+
+## What’s in this folder
+
+- **`build_lr_dataset.py`**: builds LR datasets (CSV) from `preds/*.txt` + top-1 inliers (`*.torch`), with:
+  - **feature**: `inliers_top1`
+  - **label**: `is_top1_correct` (computed by distance <= 25m; falls back to positives list if needed)
+- **`build_all_training_csvs.py`**: convenience wrapper that builds **three** SVOX-train CSVs (sun, night, combined) into `csv_files/<Combo>/`.
+- **`tune_lr_hyperparameters.py`**: trains 3 LR models (sun/night/combined), tunes `C` and selects decision threshold `t` on the validation set, and saves:
+  - `lr_model_{sun,night,combined}_C*.pkl`
+  - `threshold_vs_r1_plot.png`
+  - `tuning_summary.txt`
+- **`adaptive_reranking_eval.py`**: evaluates the adaptive strategy on a single test set (does on-the-fly matching for HARD queries only).
+- **`batch_eval_combo.py`**: runs `adaptive_reranking_eval.py` for a single combo across multiple datasets and LR models, writing `summary.csv`, `summary.txt`, and `raw.log`.
+
+## Folder structure (current)
+
+The main working area is `csv_files/<ComboName>/` (one folder per VPR+matcher combo). Example layout:
 
 ```
 adaptive_reranking/
-├── build_lr_dataset.py              # Build LR training dataset from VPR predictions + matcher inliers
-├── train_lr_from_csv.py              # Train LR model from CSV dataset
-├── tune_lr_hyperparameters.py        # Tune C and threshold hyperparameters
-├── adaptive_reranking_eval.py        # Evaluate adaptive re-ranking (Option B: adaptive matching)
-├── csv_files/                        # LR training/validation datasets
-│   ├── lr_data_cosplace_loftr_svox_train.csv
-│   ├── lr_data_cosplace_loftr_sf_xs_val.csv
-│   ├── lr_data_mixvpr_superpoint-lg_svox_train.csv
-│   └── lr_data_mixvpr_superpoint-lg_sf_xs_val.csv
-├── tuning_results_cosplace_loftr/          # Trained LR models (one folder per VPR+Matcher combo)
-│   ├── logreg_best_C10.00.pkl
-│   └── tuning_summary.txt
-└── tuning_results_mixvpr_superpoint-lg/
-    ├── logreg_best_C3.00.pkl
-    └── tuning_summary.txt
+  csv_files/
+    Cosplace_Loftr/
+      lr_data_..._svox_train_sun.csv
+      lr_data_..._svox_train_night.csv
+      lr_data_..._svox_train.csv
+      lr_data_..._sf_xs_val.csv
+      tuning_results/
+        lr_model_sun_C*.pkl
+        lr_model_night_C*.pkl
+        lr_model_combined_C*.pkl
+        threshold_vs_r1_plot.png
+        tuning_summary.txt
+      tuning_results_forceC1/            # optional (when using --force-C 1)
+      batch_eval_YYYYMMDD_HHMMSS/
+        summary.csv
+        summary.txt
+        raw.log
 ```
 
-## 🎯 Overview
+## End-to-end pipeline (runbook)
 
-**Adaptive Re-Ranking** makes the expensive image matching step (LoFTR/SuperGlue) adaptive:
+The pipeline has 5 building blocks. All paths below assume you’re in the **project root**, unless stated otherwise.
 
-1. **For every query**: Run matcher for **top-1 only** (cheap, needed for LR decision)
-2. **Use trained LR model** to predict: Is top-1 likely correct? (`P(correct | inliers_top1)`)
-3. **EASY queries** (high probability): Skip further matching, use **retrieval-only ranking**
-4. **HARD queries** (low probability): Run matcher for **top-20**, then **re-rank by inliers**
+### 1) Run VPR to generate `preds/` (outside this folder)
 
-**Result**: ~70% of queries skip expensive matching, saving ~3× computation while maintaining accuracy.
-
-## 📋 Pipeline Steps
-
-### Step 1: Generate VPR Retrieval Results
-
-Run CosPlace/MixVPR retrieval on your datasets (this is done outside this folder):
+Run from `VPR-methods-evaluation/` to generate `logs/<log_dir>/<timestamp>/preds`:
 
 ```powershell
 cd VPR-methods-evaluation
-python main.py --method=cosplace --backbone=ResNet50 --descriptors_dimension=512 ...
-```
-
-### Step 2: Generate Top-1 Matcher Inliers (for LR decision)
-
-Run matcher (LoFTR/SuperGlue) for **top-1 only** on training/validation sets:
-
-```powershell
-cd VPR-methods-evaluation
-python ..\match_queries_preds.py `
-  --preds-dir logs/logs_cosplace_svox_train_sun/2025-XX-XX/preds `
-  --matcher loftr `
-  --device cuda `
-  --im-size 512 `
-  --num-preds 1
-```
-
-**Repeat for:**
-- SVOX train (Sun + Night) → for LR training
-- SF-XS val → for LR validation
-
-### Step 3: Build LR Training Dataset
-
-Extract features (`inliers_top1`) and labels (`is_top1_correct`) from predictions + inliers:
-
-```powershell
-python adaptive_reranking\build_lr_dataset.py `
-  --preds-dirs VPR-methods-evaluation/logs/logs_cosplace_svox_train_sun/2025-XX-XX/preds `
-              VPR-methods-evaluation/logs/logs_cosplace_svox_train_night/2025-XX-XX/preds `
-  --inliers-dirs VPR-methods-evaluation/logs/logs_cosplace_svox_train_sun/2025-XX-XX/preds_loftr `
-                 VPR-methods-evaluation/logs/logs_cosplace_svox_train_night/2025-XX-XX/preds_loftr `
-  --dataset-names svox_train_sun svox_train_night `
-  --out-csv adaptive_reranking\csv_files\lr_data_cosplace_loftr_svox_train.csv `
-  --vpr-method cosplace `
-  --matcher-method loftr
-```
-
-**For validation dataset:**
-
-```powershell
-python adaptive_reranking\build_lr_dataset.py `
-  --preds-dirs VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/2025-XX-XX/preds `
-  --inliers-dirs VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/2025-XX-XX/preds_loftr `
-  --dataset-names sf_xs_val `
-  --out-csv adaptive_reranking\csv_files\lr_data_cosplace_loftr_sf_xs_val.csv `
-  --vpr-method cosplace `
-  --matcher-method loftr
-```
-
-### Step 4: Tune LR Hyperparameters
-
-Find optimal `C` (regularization) and `threshold` (decision boundary):
-
-```powershell
-python adaptive_reranking\tune_lr_hyperparameters.py `
-  --train-csv adaptive_reranking\csv_files\lr_data_cosplace_loftr_svox_train.csv `
-  --val-csv adaptive_reranking\csv_files\lr_data_cosplace_loftr_sf_xs_val.csv `
-  --output-dir adaptive_reranking\tuning_results_cosplace_loftr `
-  --C-values 0.01 0.1 0.3 1.0 3.0 10.0 `
-  --threshold-values 0.3 0.4 0.5 0.6 0.7
-```
-
-**Output**: `tuning_results_cosplace_loftr/logreg_best_C*.pkl` (saved model + scaler + threshold)
-
-### Step 5: Evaluate Adaptive Re-Ranking on Test Sets
-
-For each test set (SF-XS test, Tokyo-XS test, SVOX test Sun/Night):
-
-```powershell
-cd VPR-methods-evaluation
-python ..\adaptive_reranking\adaptive_reranking_eval.py `
-  --preds-dir logs\logs_cosplace_sf_xs_test\2025-XX-XX\preds `
-  --top1-inliers-dir logs\logs_cosplace_sf_xs_test\2025-XX-XX\preds_loftr `
-  --lr-model ..\adaptive_reranking\tuning_results_cosplace_loftr\logreg_best_C10.00.pkl `
-  --num-preds 20 `
-  --matcher loftr `
-  --device cuda `
-  --im-size 512 `
-  --wandb-project vpr_ext6_1 `
-  --wandb-run-name sf_xs_test_cos_loftr_adaptive
-```
-
-**Output**: Recall@1/5/10/20, % easy/hard queries, avg LoFTR pairs per query, total runtime.
-
-## 🔄 Using for Other VPR+Matcher Combinations
-
-### Example: MixVPR + LoFTR
-
-1. **Generate MixVPR predictions** (outside this folder)
-2. **Generate top-1 LoFTR inliers** for training/validation
-3. **Build LR dataset**:
-   ```powershell
-   python adaptive_reranking\build_lr_dataset.py `
-     --preds-dirs ... `
-     --inliers-dirs ... `
-     --dataset-names ... `
-     --out-csv adaptive_reranking\csv_files\lr_data_mixvpr_loftr_svox_train.csv `
-     --vpr-method mixvpr `
-     --matcher-method loftr
-   ```
-4. **Tune hyperparameters**:
-   ```powershell
-   python adaptive_reranking\tune_lr_hyperparameters.py `
-     --train-csv adaptive_reranking\csv_files\lr_data_mixvpr_loftr_svox_train.csv `
-     --val-csv adaptive_reranking\csv_files\lr_data_mixvpr_loftr_sf_xs_val.csv `
-     --output-dir adaptive_reranking\tuning_results_mixvpr_loftr
-   ```
-5. **Evaluate adaptive re-ranking**:
-   ```powershell
-   cd VPR-methods-evaluation
-   python ..\adaptive_reranking\adaptive_reranking_eval.py `
-     --preds-dir ... `
-     --top1-inliers-dir ... `
-     --lr-model ..\adaptive_reranking\tuning_results_mixvpr_loftr\logreg_best_C*.pkl `
-     --matcher loftr ...
-   ```
-
-### Example: CosPlace + SuperGlue (SuperPoint+LightGlue)
-
-Same steps, but:
-- Use `--matcher superpoint-lg` instead of `--matcher loftr`
-- Use `--matcher-method superpoint-lg` in `build_lr_dataset.py`
-- Create `tuning_results_cosplace_superpoint-lg/` folder
-
-### Full example: MixVPR + SuperPoint+LightGlue (what you ran)
-
-Below is the **exact pipeline** used for `MixVPR + SuperPoint+LightGlue` on SVOX / SF-XS / Tokyo-XS.
-
-- **Conventions**:
-  - Commands with `python main.py`, `python ..\match_queries_preds.py`, and `python ..\reranking.py` are run from `VPR-methods-evaluation/`
-  - Commands with `python adaptive_reranking\...` are run from the **project root**
-
-#### 1) Train LR: SVOX train (Sun + Night) + SF-XS val
-
-- **Phase 1 – VPR on SVOX train (MixVPR)** (run from `VPR-methods-evaluation/`):
-
-```powershell
-cd VPR-methods-evaluation
-python main.py --method=mixvpr --backbone=ResNet50 --descriptors_dimension=4096 --image_size 320 320 `
-  --database_folder ../data/svox/images/train/gallery `
-  --queries_folder ../data/svox/images/train/queries_sun `
-  --num_preds_to_save 20 --recall_values 1 5 10 20 `
-  --log_dir logs_mixvpr_svox_train_sun
-
-python main.py --method=mixvpr --backbone=ResNet50 --descriptors_dimension=4096 --image_size 320 320 `
-  --database_folder ../data/svox/images/train/gallery `
-  --queries_folder ../data/svox/images/train/queries_night `
-  --num_preds_to_save 20 --recall_values 1 5 10 20 `
-  --log_dir logs_mixvpr_svox_train_night
-```
-
-- **Phase 2 – SuperPoint+LightGlue top‑1 inliers on SVOX train** (run from `VPR-methods-evaluation/`):
-
-```powershell
-cd VPR-methods-evaluation
-python ..\match_queries_preds.py --preds-dir logs/logs_mixvpr_svox_train_sun/2025-12-17_21-10-57/preds `
-  --matcher superpoint-lg --device cuda --im-size 512 --num-preds 1
-
-python ..\match_queries_preds.py --preds-dir logs/logs_mixvpr_svox_train_night/2025-12-17_21-16-22/preds `
-  --matcher superpoint-lg --device cuda --im-size 512 --num-preds 1
-```
-
-- **Phase 3 – Build LR train CSV (`lr_data_mixvpr_superpoint-lg_svox_train.csv`)** (project root):
-
-```powershell
-python adaptive_reranking\build_lr_dataset.py `
-  --preds-dirs VPR-methods-evaluation/logs/logs_mixvpr_svox_train_sun/2025-12-17_21-10-57/preds `
-                 VPR-methods-evaluation/logs/logs_mixvpr_svox_train_night/2025-12-17_21-16-22/preds `
-  --inliers-dirs VPR-methods-evaluation/logs/logs_mixvpr_svox_train_sun/2025-12-17_21-10-57/preds_superpoint-lg `
-                 VPR-methods-evaluation/logs/logs_mixvpr_svox_train_night/2025-12-17_21-16-22/preds_superpoint-lg `
-  --dataset-names svox_train_sun svox_train_night `
-  --out-csv adaptive_reranking\csv_files\lr_data_mixvpr_superpoint-lg_svox_train.csv `
-  --vpr-method mixvpr `
-  --matcher-method superpoint-lg
-```
-
-- **SF-XS val: VPR + top‑1 inliers + LR val CSV**:
-
-```powershell
-cd VPR-methods-evaluation
-python main.py --method=mixvpr --backbone=ResNet50 --descriptors_dimension=4096 --image_size 320 320 `
+python main.py --method=cosplace --backbone=ResNet50 --descriptors_dimension=512 --image_size 512 512 `
   --database_folder ../data/sf_xs/val/database `
-  --queries_folder ../data/sf_xs/val/queries `
+  --queries_folder  ../data/sf_xs/val/queries `
   --num_preds_to_save 20 --recall_values 1 5 10 20 `
-  --log_dir logs_mixvpr_sf_xs_val
+  --log_dir logs_cosplace_sf_xs_val
 ```
+
+### 2) Compute matcher inliers (`match_queries_preds.py`)
+
+Run from `VPR-methods-evaluation/`.
+
+- **Top-1 only** (needed for LR decision + CSV building):
 
 ```powershell
-python ..\match_queries_preds.py --preds-dir logs/logs_mixvpr_sf_xs_val/2025-12-17_21-46-57/preds `
-  --matcher superpoint-lg --device cuda --im-size 512 --num-preds 1
-
-python adaptive_reranking\build_lr_dataset.py `
-  --preds-dirs VPR-methods-evaluation/logs/logs_mixvpr_sf_xs_val/2025-12-17_21-46-57/preds `
-  --inliers-dirs VPR-methods-evaluation/logs/logs_mixvpr_sf_xs_val/2025-12-17_21-46-57/preds_superpoint-lg `
-  --dataset-names sf_xs_val `
-  --out-csv adaptive_reranking\csv_files\lr_data_mixvpr_superpoint-lg_sf_xs_val.csv `
-  --vpr-method mixvpr `
-  --matcher-method superpoint-lg
+cd VPR-methods-evaluation
+python ..\match_queries_preds.py --preds-dir logs/logs_cosplace_sf_xs_val/<timestamp>/preds `
+  --matcher loftr --device cuda --im-size 512 --num-preds 1
 ```
 
-- **Tune LR (`tuning_results_mixvpr_superpoint-lg`)**:
+- **Top-20** (needed for full re-ranking and for threshold analysis on val):
+
+```powershell
+cd VPR-methods-evaluation
+python ..\match_queries_preds.py --preds-dir logs/logs_cosplace_sf_xs_val/<timestamp>/preds `
+  --out-dir  logs/logs_cosplace_sf_xs_val/<timestamp>/preds_loftr_full20 `
+  --matcher loftr --device cuda --im-size 512 --num-preds 20
+```
+
+### 3) Build LR CSVs
+
+- **Training CSVs** (SVOX train sun/night/combined) in one command:
+
+```powershell
+python adaptive_reranking\build_all_training_csvs.py `
+  --vpr-method cosplace `
+  --matcher-method loftr `
+  --preds-dir-sun   VPR-methods-evaluation/logs/logs_cosplace_svox_train_sun/<timestamp>/preds `
+  --inliers-dir-sun VPR-methods-evaluation/logs/logs_cosplace_svox_train_sun/<timestamp>/preds_loftr `
+  --preds-dir-night   VPR-methods-evaluation/logs/logs_cosplace_svox_train_night/<timestamp>/preds `
+  --inliers-dir-night VPR-methods-evaluation/logs/logs_cosplace_svox_train_night/<timestamp>/preds_loftr `
+  --output-dir csv_files
+```
+
+- **Validation CSV** (SF-XS val) using top-1 inliers:
+
+```powershell
+python adaptive_reranking\build_lr_dataset.py `
+  --preds-dirs   VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/<timestamp>/preds `
+  --inliers-dirs VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/<timestamp>/preds_loftr `
+  --dataset-names sf_xs_val `
+  --out-csv adaptive_reranking/csv_files/Cosplace_Loftr/lr_data_cosplace_loftr_sf_xs_val.csv `
+  --vpr-method cosplace `
+  --matcher-method loftr
+```
+
+### 4) Tune LR models + decision threshold on validation
+
+This script expects that inside `--csv-folder` you have:
+- `*_svox_train_sun.csv`, `*_svox_train_night.csv`, `*_svox_train.csv`
+- `*_sf_xs_val.csv`
+
+Run:
 
 ```powershell
 python adaptive_reranking\tune_lr_hyperparameters.py `
-  --train-csv adaptive_reranking\csv_files\lr_data_mixvpr_superpoint-lg_svox_train.csv `
-  --val-csv adaptive_reranking\csv_files\lr_data_mixvpr_superpoint-lg_sf_xs_val.csv `
-  --output-dir adaptive_reranking\tuning_results_mixvpr_superpoint-lg
+  --csv-folder adaptive_reranking/csv_files/Cosplace_Loftr `
+  --val-preds-dir        VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/<timestamp>/preds `
+  --val-top20-inliers-dir VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/<timestamp>/preds_loftr_full20
 ```
 
-The best model is saved as  
-`adaptive_reranking\tuning_results_mixvpr_superpoint-lg\logreg_best_C3.00.pkl`.
+Outputs are written to `adaptive_reranking/csv_files/Cosplace_Loftr/tuning_results/` by default.
 
-#### 2) Adaptive pipeline on test sets (SVOX test Sun/Night, SF-XS test, Tokyo-XS test)
-
-- **Phase 1 – VPR on each test set** (run from `VPR-methods-evaluation/`):
+Optional: force a specific `C` (useful for ablations):
 
 ```powershell
-python main.py --method=mixvpr --backbone=ResNet50 --descriptors_dimension=4096 --image_size 320 320 `
-  --database_folder ../data/svox/images/test/gallery `
-  --queries_folder ../data/svox/images/test/queries_sun `
-  --num_preds_to_save 20 --recall_values 1 5 10 20 `
-  --log_dir logs_mixvpr_svox_test_sun
-
-python main.py --method=mixvpr --backbone=ResNet50 --descriptors_dimension=4096 --image_size 320 320 `
-  --database_folder ../data/svox/images/test/gallery `
-  --queries_folder ../data/svox/images/test/queries_night `
-  --num_preds_to_save 20 --recall_values 1 5 10 20 `
-  --log_dir logs_mixvpr_svox_test_night
-
-python main.py --method=mixvpr --backbone=ResNet50 --descriptors_dimension=4096 --image_size 320 320 `
-  --database_folder ../data/sf_xs/test/database `
-  --queries_folder ../data/sf_xs/test/queries `
-  --num_preds_to_save 20 --recall_values 1 5 10 20 `
-  --log_dir logs_mixvpr_sf_xs_test
-
-python main.py --method=mixvpr --backbone=ResNet50 --descriptors_dimension=4096 --image_size 320 320 `
-  --database_folder ../data/tokyo_xs/test/database `
-  --queries_folder ../data/tokyo_xs/test/queries `
-  --num_preds_to_save 20 --recall_values 1 5 10 20 `
-  --log_dir logs_mixvpr_tokyo_xs_test
+python adaptive_reranking\tune_lr_hyperparameters.py `
+  --csv-folder adaptive_reranking/csv_files/Cosplace_Loftr `
+  --val-preds-dir        VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/<timestamp>/preds `
+  --val-top20-inliers-dir VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/<timestamp>/preds_loftr_full20 `
+  --force-C 1.0 `
+  --output-dir adaptive_reranking/csv_files/Cosplace_Loftr/tuning_results_forceC1
 ```
 
-- **Phase 2 – SuperPoint+LG top‑1 inliers for all test sets** (run from `VPR-methods-evaluation/`):
+### 5) Evaluate adaptive re-ranking on test sets
 
-```powershell
-python ..\match_queries_preds.py --preds-dir logs/logs_mixvpr_svox_test_sun/2025-12-17_22-49-10/preds `
-  --matcher superpoint-lg --device cuda --im-size 512 --num-preds 1
-
-python ..\match_queries_preds.py --preds-dir logs/logs_mixvpr_svox_test_night/2025-12-17_23-02-33/preds `
-  --matcher superpoint-lg --device cuda --im-size 512 --num-preds 1
-
-python ..\match_queries_preds.py --preds-dir logs/logs_mixvpr_sf_xs_test/2025-12-17_23-07-12/preds `
-  --matcher superpoint-lg --device cuda --im-size 512 --num-preds 1
-
-python ..\match_queries_preds.py --preds-dir logs/logs_mixvpr_tokyo_xs_test/2025-12-17_23-13-42/preds `
-  --matcher superpoint-lg --device cuda --im-size 512 --num-preds 1
-```
-
-- **Phase 3 – Adaptive evaluation (run from `VPR-methods-evaluation/`)**:
+Run from `VPR-methods-evaluation/` (important on Windows; see notes below):
 
 ```powershell
 cd VPR-methods-evaluation
-
 python ..\adaptive_reranking\adaptive_reranking_eval.py `
-  --preds-dir logs\logs_mixvpr_svox_test_sun\2025-12-17_22-49-10\preds `
-  --top1-inliers-dir logs\logs_mixvpr_svox_test_sun\2025-12-17_22-49-10\preds_superpoint-lg `
-  --lr-model ..\adaptive_reranking\tuning_results_mixvpr_superpoint-lg\logreg_best_C3.00.pkl `
-  --matcher superpoint-lg --device cuda --im-size 512 --num-preds 20 `
-  --wandb-project vpr_ext6_1 --wandb-run-name svox_test_sun_mixvpr_superpoint-lg_adaptive
-
-python ..\adaptive_reranking\adaptive_reranking_eval.py `
-  --preds-dir logs\logs_mixvpr_svox_test_night\2025-12-17_23-02-33\preds `
-  --top1-inliers-dir logs\logs_mixvpr_svox_test_night\2025-12-17_23-02-33\preds_superpoint-lg `
-  --lr-model ..\adaptive_reranking\tuning_results_mixvpr_superpoint-lg\logreg_best_C3.00.pkl `
-  --matcher superpoint-lg --device cuda --im-size 512 --num-preds 20 `
-  --wandb-project vpr_ext6_1 --wandb-run-name svox_test_night_mixvpr_superpoint-lg_adaptive
-
-python ..\adaptive_reranking\adaptive_reranking_eval.py `
-  --preds-dir logs\logs_mixvpr_sf_xs_test\2025-12-17_23-07-12\preds `
-  --top1-inliers-dir logs\logs_mixvpr_sf_xs_test\2025-12-17_23-07-12\preds_superpoint-lg `
-  --lr-model ..\adaptive_reranking\tuning_results_mixvpr_superpoint-lg\logreg_best_C3.00.pkl `
-  --matcher superpoint-lg --device cuda --im-size 512 --num-preds 20 `
-  --wandb-project vpr_ext6_1 --wandb-run-name sf_xs_test_mixvpr_superpoint-lg_adaptive
-
-python ..\adaptive_reranking\adaptive_reranking_eval.py `
-  --preds-dir logs\logs_mixvpr_tokyo_xs_test\2025-12-17_23-13-42\preds `
-  --top1-inliers-dir logs\logs_mixvpr_tokyo_xs_test\2025-12-17_23-13-42\preds_superpoint-lg `
-  --lr-model ..\adaptive_reranking\tuning_results_mixvpr_superpoint-lg\logreg_best_C3.00.pkl `
-  --matcher superpoint-lg --device cuda --im-size 512 --num-preds 20 `
-  --wandb-project vpr_ext6_1 --wandb-run-name tokyo_xs_test_mixvpr_superpoint-lg_adaptive
+  --preds-dir logs\logs_cosplace_sf_xs_test\<timestamp>\preds `
+  --top1-inliers-dir logs\logs_cosplace_sf_xs_test\<timestamp>\preds_loftr `
+  --lr-model ..\adaptive_reranking\csv_files\Cosplace_Loftr\tuning_results\lr_model_combined_C0.01.pkl `
+  --num-preds 20 --matcher loftr --device cuda --im-size 512
 ```
 
-#### 3) Full (non‑adaptive) pipeline for comparison
+This reports:
+- adaptive Recall@N (`recall@1`, `recall@5`, `recall@10`, `recall@20`)
+- % easy / % hard
+- matching cost (`avg_total_pairs_incl_top1` and totals)
+- runtimes
 
-- **Phase 1 – Get SuperPoint‑LG inliers for top‑20** (run from `VPR-methods-evaluation/`):
+## Batch evaluation (recommended)
+
+If you have 3 LR models in a tuning folder (`lr_model_{sun,night,combined}_*.pkl`), you can evaluate the combo across datasets with one command:
 
 ```powershell
-python ..\match_queries_preds.py `
-  --preds-dir logs/logs_mixvpr_svox_test_sun/2025-12-17_22-49-10/preds `
-  --out-dir  logs/logs_mixvpr_svox_test_sun/2025-12-17_22-49-10/preds_superpoint-lg_full20 `
-  --matcher superpoint-lg --device cuda --im-size 512 --num-preds 20
-
-python ..\match_queries_preds.py `
-  --preds-dir logs/logs_mixvpr_svox_test_night/2025-12-17_23-02-33/preds `
-  --out-dir  logs/logs_mixvpr_svox_test_night/2025-12-17_23-02-33/preds_superpoint-lg_full20 `
-  --matcher superpoint-lg --device cuda --im-size 512 --num-preds 20
-
-python ..\match_queries_preds.py `
-  --preds-dir logs/logs_mixvpr_sf_xs_test/2025-12-17_23-07-12/preds `
-  --out-dir  logs/logs_mixvpr_sf_xs_test/2025-12-17_23-07-12/preds_superpoint-lg_full20 `
-  --matcher superpoint-lg --device cuda --im-size 512 --num-preds 20
-
-python ..\match_queries_preds.py `
-  --preds-dir logs/logs_mixvpr_tokyo_xs_test/2025-12-17_23-13-42/preds `
-  --out-dir  logs/logs_mixvpr_tokyo_xs_test/2025-12-17_23-13-42/preds_superpoint-lg_full20 `
-  --matcher superpoint-lg --device cuda --im-size 512 --num-preds 20
+python adaptive_reranking\batch_eval_combo.py `
+  --combo-name "Cosplace+Loftr" `
+  --matcher loftr `
+  --lr-models-dir adaptive_reranking/csv_files/Cosplace_Loftr/tuning_results `
+  --sf-xs-test-preds   VPR-methods-evaluation/logs/logs_cosplace_sf_xs_test/<timestamp>/preds `
+  --tokyo-xs-test-preds VPR-methods-evaluation/logs/logs_cosplace_tokyo_xs_test/<timestamp>/preds `
+  --svox-sun-test-preds  VPR-methods-evaluation/logs/logs_cosplace_svox_test_sun/<timestamp>/preds `
+  --svox-night-test-preds VPR-methods-evaluation/logs/logs_cosplace_svox_test_night/<timestamp>/preds
 ```
 
-- **Phase 2 – Re-ranking (run from `VPR-methods-evaluation/`)**:
+It will create a new `batch_eval_YYYYMMDD_HHMMSS/` folder next to `--lr-models-dir` and write:
+- `summary.csv`: easy to paste into Excel
+- `summary.txt`: readable table
+- `raw.log`: full logs for all sub-runs
+
+## How tuning works (what is optimized)
+
+`tune_lr_hyperparameters.py` does two separate selections:
+
+- **Best `C`**: selected on validation via **ROC-AUC** of predicting `is_top1_correct` from `inliers_top1`.
+- **Best threshold `t`**: selected on validation by maximizing **classification accuracy** of the easy/hard decision, i.e. whether the LR decision matches the ground-truth “top-1 correct?” label.
+
+The script still produces a **Threshold vs R@1** plot on validation, because the project writeup asks for dataset-based threshold analysis. The chosen threshold is simply not selected by maximizing R@1 (SF-XS val is often too easy and can lead to degenerate thresholds if you optimize R@1 directly).
+
+## Windows notes / common issues
+
+- **Run eval from `VPR-methods-evaluation/`**: many `preds/*.txt` files contain relative paths, so running `adaptive_reranking_eval.py` from elsewhere can trigger file-not-found errors.
+- **If you only have `*_full20`**: you can use it as the top-1 source too (top-1 is just index 0).
+  - For CLI eval: set `--top1-inliers-dir` to the same `preds_<matcher>_full20` folder.
+  - For batch eval: it expects a `preds_<matcher>` folder to exist; easiest workaround is to copy it:
 
 ```powershell
-cd VPR-methods-evaluation
-
-python ..\reranking.py `
-  --preds-dir   logs\logs_mixvpr_svox_test_sun\2025-12-17_22-49-10\preds `
-  --inliers-dir logs\logs_mixvpr_svox_test_sun\2025-12-17_22-49-10\preds_superpoint-lg_full20 `
-  --num-preds 20 --matcher superpoint-lg --vpr-method mixvpr
-
-python ..\reranking.py `
-  --preds-dir   logs\logs_mixvpr_svox_test_night\2025-12-17_23-02-33\preds `
-  --inliers-dir logs\logs_mixvpr_svox_test_night\2025-12-17_23-02-33\preds_superpoint-lg_full20 `
-  --num-preds 20 --matcher superpoint-lg --vpr-method mixvpr
-
-python ..\reranking.py `
-  --preds-dir   logs\logs_mixvpr_sf_xs_test\2025-12-17_23-07-12\preds `
-  --inliers-dir logs\logs_mixvpr_sf_xs_test\2025-12-17_23-07-12\preds_superpoint-lg_full20 `
-  --num-preds 20 --matcher superpoint-lg --vpr-method mixvpr
-
-python ..\reranking.py `
-  --preds-dir   logs\logs_mixvpr_tokyo_xs_test\2025-12-17_23-13-42\preds `
-  --inliers-dir logs\logs_mixvpr_tokyo_xs_test\2025-12-17_23-13-42\preds_superpoint-lg_full20 `
-  --num-preds 20 --matcher superpoint-lg --vpr-method mixvpr
+robocopy "...\preds_superpoint-lg_full20" "...\preds_superpoint-lg" /E
 ```
 
-## 📊 Expected Results
+## Dependencies
 
-For **CosPlace + LoFTR** on SVOX test Sun:
-- **Easy queries**: ~70-75% (skip expensive matching)
-- **Hard queries**: ~25-30% (full LoFTR + re-ranking)
-- **Recall@1**: ~85-90% (comparable to full re-ranking)
-- **Avg LoFTR pairs/query**: ~6-7 (vs 20 for full re-ranking) → **~3× cost savings**
-
-## 📝 Notes
-
-- **Where to run commands**:
-  - Run `python main.py ...`, `python ..\match_queries_preds.py ...`, and `python ..\reranking.py ...` **from** `VPR-methods-evaluation/`
-  - Run `python adaptive_reranking\...` **from the project root**
-- CSV files are stored in `adaptive_reranking/csv_files/` for organization
-- Each VPR+Matcher combination gets its own `tuning_results_*/` folder under `adaptive_reranking/`
-- The adaptive script **never overwrites** your existing log folders (reads top-1 inliers, writes nothing)
-
-## 🔧 Dependencies
-
-- `util.py` (in project root) - for reading predictions and computing distances
-- `setup_temp_dir.py` (in project root) - for temporary file handling
-- `image-matching-models/` - for LoFTR/SuperGlue matching
-- Standard ML libraries: `sklearn`, `pandas`, `numpy`, `torch`, `joblib`
+- `util.py` and `setup_temp_dir.py` live in the project root (imported by these scripts).
+- Matchers are loaded via the local `image-matching-models/` package.
+- Python deps: `torch`, `numpy`, `pandas`, `scikit-learn`, `matplotlib`, `joblib`, `tqdm`, `wandb` (optional).
 
