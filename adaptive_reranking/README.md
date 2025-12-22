@@ -98,6 +98,10 @@ python ..\reranking.py `
 
 1) **Compute top‑1 inliers** (cheap, used only for the LR decision):
 
+We compute **top‑1 inliers for every split**:
+- **train + val**: to build the LR CSVs (`inliers_top1` + label)
+- **test**: for the LR decision at test time (decide EASY vs HARD for each query)
+
 ```powershell
 cd VPR-methods-evaluation
 python ..\match_queries_preds.py `
