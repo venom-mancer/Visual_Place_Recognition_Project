@@ -132,6 +132,10 @@ python adaptive_reranking\build_lr_dataset.py `
 
 4) **Tune LR + choose threshold on validation** (also needs validation top‑20 inliers):
 
+Why do we compute **top‑20 inliers for SF‑XS val**?
+- To plot/analyze how validation **R@1 changes vs threshold** (the script needs inliers for the HARD branch to simulate “re-rank top‑K” on the validation set).
+- In a *real* adaptive pipeline on test sets, we **do not** want to precompute top‑20 for every query (that would waste the compute we’re trying to save). Test-time only needs **top‑1 for all queries**, then **top‑K only for queries predicted HARD**.
+
 ```powershell
 python adaptive_reranking\tune_lr_hyperparameters.py `
   --csv-folder adaptive_reranking/csv_files/Cosplace_Loftr `
@@ -140,6 +144,9 @@ python adaptive_reranking\tune_lr_hyperparameters.py `
 ```
 
 5) **Run adaptive evaluation on SF‑XS test**:
+
+Tip: instead of manually running each LR model on each test set, you can use `batch_eval_combo.py`.
+For a single VPR+matcher combo you typically have **3 LR models** (sun/night/combined) and **4 test sets**, so that’s **12 runs** — `batch_eval_combo.py` automates this and writes `summary.csv`, `summary.txt`, and `raw.log`.
 
 ```powershell
 cd VPR-methods-evaluation
