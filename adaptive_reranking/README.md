@@ -147,6 +147,9 @@ python adaptive_reranking\tune_lr_hyperparameters.py `
   --val-top20-inliers-dir VPR-methods-evaluation/logs/logs_cosplace_sf_xs_val/<timestamp>/preds_loftr_full20
 ```
 
+This step trains and saves **3 LR models** (sun / night / combined) under:
+- `adaptive_reranking/csv_files/Cosplace_Loftr/tuning_results/`
+
 5) **Run adaptive evaluation on SF‑XS test**:
 
 Tip: instead of manually running each LR model on each test set, you can use `batch_eval_combo.py`.
