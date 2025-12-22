@@ -1,0 +1,65 @@
+
+-------l2
+✅ Final table (your requested format)
+Method	Dataset	Feature extraction (total)	Feature extraction (avg/query)	Matching (total)	Matching (avg/query)	Phase 1 avg/query
+CosPlace	TokyoXS	209.9 s	0.666 s	0.081 s	0.00026 s	0.666 s
+
+
+-----dot---------
+Method	Dataset	Feature extraction (total)	Feature extraction (avg/query)	Matching (total)	Matching (avg/query)	Phase 1 avg/query
+CosPlace	TokyoXS	211.55 s	0.671 s	0.081 s	0.00026 s	0.671 s
+
+-----cosine---
+✅ Final table (requested format) 
+Method	Dataset	Feature extraction (total)	Feature extraction (avg/query)	Matching (total)	Matching (avg/query)	Phase 1 avg/query
+CosPlace	TokyoXS	211.68 s	0.672 s	0.079 s	0.00025 s	0.672 s
+
+---cosine----------
+Method	Dataset	Feature extraction (total)	Feature extraction (avg/query)	Matching (total)	Matching (avg/query)	Phase 1 avg/query
+NetVLAD	TokyoXS	368.66 s	1.170 s	0.408 s	0.00130 s	1.171 s
+
+
+------l2
+Method	Dataset	Feature extraction (total)	Feature extraction (avg/query)	Matching (total)	Matching (avg/query)	Phase 1 avg/query
+NetVLAD	TokyoXS	367.93 s	1.168 s	0.424 s	0.00135 s	1.170 s
+
+
+-----dot------------
+
+✅ Final table (requested format)
+Method	Dataset	Feature extraction (total)	Feature extraction (avg/query)	Matching (total)	Matching (avg/query)	Phase 1 avg/query
+NetVLAD	TokyoXS	366.93 s	1.165 s	0.424 s	0.00135 s	1.167 s
+
+
+----cosine-----
+✅ Final table (requested format)
+Method	Dataset	Feature extraction (total)	Feature extraction (avg/query)	Matching (total)	Matching (avg/query)	Phase 1 avg/query
+MixVPR	TokyoXS	137 s	0.435 s	4 s	0.0127 s	0.448 s
+
+
+------l2-----
+✅ Final table (requested format)
+Method	Dataset	Feature extraction (total)	Feature extraction (avg/query)	Matching (total)	Matching (avg/query)	Phase 1 avg/query
+MixVPR	TokyoXS	140 s	0.444 s	6 s	0.0190 s	0.463 s
+
+------dot-----
+
+
+
+
+
+
+-----dot-----------
+
+Method	Dataset	Feature extraction (total)	Feature extraction (avg/query)	Matching (total)	Matching (avg/query)	Phase 1 avg/query
+MegaLoc	TokyoXS	1240 s	3.94 s	32 s	0.102 s	4.04 s
+
+
+------cosine-------
+
+Method	Dataset	Feature extraction (total)	Feature extraction (avg/query)	Matching (total)	Matching (avg/query)	Phase 1 avg/query
+MegaLoc	TokyoXS	1243 s	3.95 s	32 s	0.102 s	4.05 s
+
+
+
+
