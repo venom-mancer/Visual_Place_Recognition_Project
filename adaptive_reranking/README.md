@@ -5,19 +5,19 @@ This folder contains the code + artifacts for **adaptive re-ranking** in VPR.
 - **Goal**: save computation by running expensive image matching / re-ranking only when a query is likely “hard”.
 - **What we evaluated**: both **full (non-adaptive) re-ranking** and **adaptive re-ranking**, using **two VPR methods** and **two image matchers**, across the provided test sets.
 
-### Decision rule (matches the code)
+### Decision rule
 
 We train a Logistic Regression classifier on a single feature:
 - **feature**: `inliers_top1` = number of inliers between the query and the retrieval top‑1 candidate
 
 The LR outputs:
-- \(P(\text{top1 correct}\mid x)\) where \(x = \text{inliers\_top1}\)
+- a **probability that the retrieval top‑1 is correct**, based only on `inliers_top1`
 
 Then:
-- **EASY** if \(P(\text{top1 correct}\mid x) \ge t\) -> **don’t re-rank**
+- **EASY** if this probability is **>= threshold `t`** -> **don’t re-rank**
 - **HARD** otherwise -> **re-rank**
 
-Note: we do **not** choose \(t\) from the test set. We choose \(t\) on validation, then apply it to test sets. The **%easy/%hard on each test set** is what reflects each dataset’s inlier distribution.
+Note: we do **not** choose `t` from the test set. We choose `t` on validation, then apply it to test sets. The **%easy/%hard on each test set** is what reflects each dataset’s inlier distribution.
 
 ## Folder map (complete)
 
