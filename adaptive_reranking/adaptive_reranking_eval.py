@@ -3,8 +3,8 @@ Adaptive re-ranking with *adaptive matching* (Option B).
 
 For each query (test time):
   1) Use existing matcher top-1 inliers + trained LR model to decide if the query is EASY or HARD.
-  2) EASY  → trust retrieval-only ranking (no extra image matching, no re-ranking).
-  3) HARD  → on-the-fly run the chosen matcher for top-K predictions, re-rank by inliers, then evaluate Recall@N.
+  2) EASY  -> trust retrieval-only ranking (no extra image matching, no re-ranking).
+  3) HARD  -> on-the-fly run the chosen matcher for top-K predictions, re-rank by inliers, then evaluate Recall@N.
 
 This script:
   - Never overwrites your existing logs (top-1 inliers are read-only).
@@ -132,6 +132,17 @@ def parse_arguments():
         default=None,
         help="Optional W&B run name (if not set, a default name is used).",
     )
+    parser.add_argument(
+        "--tqdm-desc",
+        type=str,
+        default=None,
+        help="Optional tqdm description for per-query progress bar (useful for batch runs).",
+    )
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable per-query tqdm progress bar.",
+    )
 
     args = parser.parse_args()
 
@@ -140,8 +151,11 @@ def parse_arguments():
     return args
 
 
-def main(args):
-    # Measure wall-clock runtime
+def evaluate(args):
+    """
+    Run adaptive re-ranking evaluation and return key metrics as a dict.
+    This is used both by the CLI and by batch wrappers.
+    """
     start_time = time.time()
 
     # Optionally initialize Weights & Biases
@@ -212,10 +226,12 @@ def main(args):
     print(f"\nProcessing {total_queries} queries...")
     print("Adaptive strategy:")
     print("  - Always use existing top-1 inliers for LR decision.")
-    print("  - EASY  → retrieval-only, no extra image matching.")
-    print("  - HARD  → run the chosen matcher for top-K, then re-rank by inliers.\n")
+    print("  - EASY  -> retrieval-only, no extra image matching.")
+    print("  - HARD  -> run the chosen matcher for top-K, then re-rank by inliers.\n")
 
-    for txt_file_query in tqdm(txt_files):
+    base_desc = args.tqdm_desc or "queries"
+    desc = f"{base_desc} | thr={threshold:.2f}"
+    for txt_file_query in tqdm(txt_files, desc=desc, unit="q", disable=bool(args.no_progress)):
         try:
             txt_path = Path(txt_file_query)
 
@@ -255,12 +271,10 @@ def main(args):
 
             if is_easy:
                 # EASY: retrieval-only ranking
-                easy_queries += 1
                 ranking_dists = geo_dists
 
             else:
                 # HARD: on-the-fly image matching for top-K predictions, then re-rank
-                hard_queries += 1
 
                 # Read query + prediction paths
                 query_path, pred_paths = read_file_preds(str(txt_path))
@@ -299,6 +313,12 @@ def main(args):
             # ----------------------------------------------------------------------------------
             # 4) Evaluate Recall@N on the chosen ranking
             # ----------------------------------------------------------------------------------
+            # Count easy/hard only for successfully processed queries
+            if is_easy:
+                easy_queries += 1
+            else:
+                hard_queries += 1
+
             for i, n in enumerate(recall_values):
                 if n <= len(ranking_dists) and torch.any(ranking_dists[:n] <= dist_threshold):
                     recalls[i:] += 1
@@ -349,7 +369,7 @@ def main(args):
         print(f"  Avg extra pairs per processed query: {avg_extra_pairs:.2f}")
         print(
             "  Approx. avg TOTAL pairs per query including top-1: "
-            f"{avg_total_pairs_incl_top1:.2f} (baseline full re-ranking would be ≈ {args.num_preds})"
+            f"{avg_total_pairs_incl_top1:.2f} (baseline full re-ranking would be ~ {args.num_preds})"
         )
 
         # Log to W&B if enabled
@@ -393,6 +413,40 @@ def main(args):
 
         if wandb_run is not None:
             wandb.finish()
+
+    # Return metrics (even if processed_queries == 0)
+    pct_easy = (easy_queries / processed_queries * 100.0) if processed_queries else None
+    pct_hard = (hard_queries / processed_queries * 100.0) if processed_queries else None
+    total_time_sec = time.time() - start_time
+    avg_time_per_query = (total_time_sec / processed_queries) if processed_queries else None
+    avg_extra_pairs = (extra_loftr_pairs / processed_queries) if processed_queries else None
+    avg_total_pairs_incl_top1 = (avg_extra_pairs + 1.0) if avg_extra_pairs is not None else None
+
+    recall_dict = {}
+    if processed_queries and len(recalls) == len(recall_values):
+        for n, rec in zip(recall_values, recalls):
+            recall_dict[f"recall@{int(n)}"] = float(rec)
+
+    return {
+        "threshold_used": float(threshold),
+        "processed_queries": int(processed_queries),
+        "total_queries": int(total_queries),
+        "skipped_queries": int(total_queries - processed_queries),
+        "easy_queries": int(easy_queries),
+        "hard_queries": int(hard_queries),
+        "pct_easy": pct_easy,
+        "pct_hard": pct_hard,
+        **recall_dict,
+        "total_runtime_sec": total_time_sec,
+        "avg_runtime_per_query_sec": avg_time_per_query,
+        "extra_pairs_total": int(extra_loftr_pairs),
+        "avg_extra_pairs_per_query": avg_extra_pairs,
+        "avg_total_pairs_incl_top1": avg_total_pairs_incl_top1,
+    }
+
+
+def main(args):
+    evaluate(args)
 
 
 if __name__ == "__main__":

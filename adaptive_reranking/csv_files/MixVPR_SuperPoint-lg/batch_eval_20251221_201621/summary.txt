@@ -1,0 +1,24 @@
+Combo: MixVPR+SuperPoint-lg
+Matcher: superpoint-lg
+LR models dir: adaptive_reranking\csv_files\MixVPR_SuperPoint-lg\tuning_results
+Device: cuda, K=20, im_size=512
+
+Dataset        | LR       | thr    | hard%  | easy%  | baseR@1 | adapR@1 | fullR@1 | time(s) 
+--------------------------------------------------------------------------------
+sf_xs_test     | combined |   0.40 |   25.9 |   74.1 |   70.20 |   78.10 |   80.70 |    548.4
+sf_xs_test     | night    |   0.35 |   23.8 |   76.2 |   70.20 |   77.60 |   80.70 |    479.0
+sf_xs_test     | sun      |   0.55 |   28.1 |   71.9 |   70.20 |   79.00 |   80.70 |    562.4
+tokyo_xs_test  | combined |   0.40 |   25.4 |   74.6 |   77.78 |   88.25 |   89.21 |    168.3
+tokyo_xs_test  | night    |   0.35 |   24.1 |   75.9 |   77.78 |   88.25 |   89.21 |    152.5
+tokyo_xs_test  | sun      |   0.55 |   26.7 |   73.3 |   77.78 |   88.25 |   89.21 |    168.9
+svox_test_sun  | combined |   0.40 |   14.2 |   85.8 |   85.36 |   90.16 |   92.15 |    258.5
+svox_test_sun  | night    |   0.35 |   12.9 |   87.1 |   85.36 |   90.16 |   92.15 |    221.5
+svox_test_sun  | sun      |   0.55 |   15.1 |   84.9 |   85.36 |   90.52 |   92.15 |    269.5
+svox_test_night | combined |   0.40 |   36.8 |   63.2 |   63.06 |   81.17 |   82.26 |    649.8
+svox_test_night | night    |   0.35 |   34.6 |   65.4 |   63.06 |   79.83 |   82.26 |    577.8
+svox_test_night | sun      |   0.55 |   38.8 |   61.2 |   63.06 |   81.77 |   82.26 |    678.0
+
+Notes:
+  - baseR@1 is computed as (top1 path in Positives paths) from the .txt files.
+  - fullR@1 is computed from precomputed *_full20 inliers if available; otherwise blank.
+  - full_pipeline_time_sec is filled only if you pass --full-pipeline-timings-json.
