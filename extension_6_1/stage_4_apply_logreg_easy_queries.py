@@ -100,12 +100,17 @@ def main(args):
     feature_names = bundle["feature_names"]
     saved_threshold = bundle.get("optimal_threshold", 0.5)
     threshold_method = bundle.get("threshold_method", "f1")
-    # This project uses "hard_score" models by default (1 = hard/wrong, 0 = easy/correct).
+    # Support both model conventions:
+    # - easy_score: 1 = easy/correct, 0 = hard/wrong
+    # - hard_score: 1 = hard/wrong, 0 = easy/correct
     target_type = bundle.get("target_type", "hard_score")
     
     print(f"Loaded model: {args.model_path}")
     print(f"  Features: {', '.join(feature_names)} ({len(feature_names)} features)")
-    print(f"  Target: {target_type} (1 = hard/wrong, 0 = easy/correct)")
+    if target_type == "easy_score":
+        print(f"  Target: {target_type} (1 = easy/correct, 0 = hard/wrong)")
+    else:
+        print(f"  Target: {target_type} (1 = hard/wrong, 0 = easy/correct)")
     print(f"  Saved threshold: {saved_threshold:.3f} (method: {threshold_method})")
     
     # Load features
@@ -128,7 +133,7 @@ def main(args):
 
     # Scale and predict (valid rows only)
     X_scaled = scaler.transform(X_valid)
-    probs_valid = model.predict_proba(X_scaled)[:, 1]  # Probability of being hard
+    probs_valid = model.predict_proba(X_scaled)[:, 1]  # P(target==1): depends on target_type
 
     # Expand back to full length (aligned with original query indices)
     probs = np.full((X_full.shape[0],), np.nan, dtype="float32")
@@ -138,7 +143,11 @@ def main(args):
     if args.calibrate_threshold and "labels" in features:
         # Calibrate threshold on test set (if labels available)
         labels = features["labels"][valid_mask].astype("float32")
-        hard_score = (1 - labels).astype("float32")  # 1 = hard/wrong, 0 = easy/correct
+        # labels: 1 = correct/easy, 0 = wrong/hard
+        if target_type == "easy_score":
+            y_true = labels  # 1 = easy, 0 = hard
+        else:
+            y_true = (1 - labels).astype("float32")  # 1 = hard, 0 = easy
         
         print(f"\n{'='*70}")
         print(f"Calibrating threshold on test set...")
@@ -148,7 +157,7 @@ def main(args):
             # Target-based calibration: achieve specific hard query rate
             target_rate = args.target_hard_rate
             optimal_threshold, achieved_rate = find_optimal_threshold(
-                hard_score, probs, method="rate", target_rate=target_rate
+                y_true, probs_valid, method="rate", target_rate=target_rate
             )
             print(f"  Method: Target hard query rate ({target_rate*100:.1f}%)")
             print(f"  Optimal threshold: {optimal_threshold:.3f}")
@@ -156,11 +165,11 @@ def main(args):
         else:
             # F1-based calibration: maximize F1-score
             optimal_threshold, best_f1 = find_optimal_threshold(
-                hard_score, probs, method="f1"
+                y_true, probs_valid, method="f1"
             )
             y_pred = (probs >= optimal_threshold).astype(int)
-            precision = precision_score(hard_score, y_pred, zero_division=0)
-            recall = recall_score(hard_score, y_pred, zero_division=0)
+            precision = precision_score(y_true, y_pred, zero_division=0)
+            recall = recall_score(y_true, y_pred, zero_division=0)
             
             print(f"  Method: Maximize F1-score")
             print(f"  Optimal threshold: {optimal_threshold:.3f}")
@@ -179,13 +188,22 @@ def main(args):
             print(f"  Using saved threshold: {optimal_threshold:.3f}")
     
     # Apply threshold on valid rows and expand to full-length decision arrays.
-    # Invalid rows (NaNs) are treated as HARD by default.
+    # Invalid rows (NaNs) are treated as HARD by default (conservative).
+    is_easy = np.zeros((X_full.shape[0],), dtype=bool)
     is_hard = np.zeros((X_full.shape[0],), dtype=bool)
-    is_hard[valid_indices] = probs_valid >= optimal_threshold  # valid predictions
+
+    if target_type == "easy_score":
+        # probs = P(easy/correct). Easy if prob >= threshold.
+        is_easy[valid_indices] = probs_valid >= optimal_threshold
+        is_hard[valid_indices] = ~is_easy[valid_indices]
+    else:
+        # probs = P(hard/wrong). Hard if prob >= threshold.
+        is_hard[valid_indices] = probs_valid >= optimal_threshold
+        is_easy[valid_indices] = ~is_hard[valid_indices]
+
     if invalid_indices.size > 0:
         is_hard[invalid_indices] = True
-
-    is_easy = ~is_hard
+        is_easy[invalid_indices] = False
 
     num_queries = is_hard.shape[0]
     num_easy = int(is_easy.sum())
@@ -235,15 +253,25 @@ def main(args):
     
     # Print summary
     print(f"\n{'='*70}")
-    print(f"Query Detection (BEFORE Image Matching) - LOGISTIC REGRESSION (HARD)")
+    if target_type == "easy_score":
+        print(f"Query Detection (BEFORE Image Matching) - LOGISTIC REGRESSION (EASY)")
+    else:
+        print(f"Query Detection (BEFORE Image Matching) - LOGISTIC REGRESSION (HARD)")
     print(f"{'='*70}")
     print(f"Processed {num_queries} queries using {len(feature_names)} retrieval features:")
     print(f"  - {', '.join(feature_names)}")
-    print(f"  - Model predicts: hard_score (probability of being hard/wrong)")
+    if target_type == "easy_score":
+        print(f"  - Model predicts: easy_score (probability of being easy/correct)")
+    else:
+        print(f"  - Model predicts: hard_score (probability of being hard/wrong)")
     print(f"  - Threshold: {optimal_threshold:.3f} ({threshold_source})")
     print(f"\nPredictions:")
-    print(f"  Hard (predicted P(hard) >= {optimal_threshold:.3f}, apply image matching): {num_hard} ({100*num_hard/num_queries:.1f}%)")
-    print(f"  Easy (predicted P(hard) < {optimal_threshold:.3f}, skip image matching): {num_easy} ({100*num_easy/num_queries:.1f}%)")
+    if target_type == "easy_score":
+        print(f"  Easy (predicted P(easy) >= {optimal_threshold:.3f}, skip image matching): {num_easy} ({100*num_easy/num_queries:.1f}%)")
+        print(f"  Hard (predicted P(easy) < {optimal_threshold:.3f}, apply image matching): {num_hard} ({100*num_hard/num_queries:.1f}%)")
+    else:
+        print(f"  Hard (predicted P(hard) >= {optimal_threshold:.3f}, apply image matching): {num_hard} ({100*num_hard/num_queries:.1f}%)")
+        print(f"  Easy (predicted P(hard) < {optimal_threshold:.3f}, skip image matching): {num_easy} ({100*num_easy/num_queries:.1f}%)")
     print(f"\nPredicted probability statistics (valid rows only):")
     print(f"  Min: {np.nanmin(probs):.3f}, Max: {np.nanmax(probs):.3f}")
     print(f"  Mean: {np.nanmean(probs):.3f}, Median: {np.nanmedian(probs):.3f}")
