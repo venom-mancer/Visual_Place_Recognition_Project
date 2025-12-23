@@ -110,18 +110,29 @@ def main(args):
     
     # Load features
     features = load_feature_file(args.feature_path)
-    X = build_feature_matrix(features, feature_names)
-    
-    # Handle NaNs
-    valid_mask = ~np.isnan(X).any(axis=1)
-    X = X[valid_mask]
-    
-    if (~valid_mask).sum() > 0:
-        print(f"Removed {(~valid_mask).sum()} queries with NaN features")
-    
-    # Scale and predict
-    X_scaled = scaler.transform(X)
-    probs = model.predict_proba(X_scaled)[:, 1]  # Probability of being hard
+    X_full = build_feature_matrix(features, feature_names)
+
+    # Handle NaNs: keep original indexing aligned with preds/*.txt order.
+    # Important for Tokyo (and other sets): if any queries have NaNs, we must NOT
+    # drop them because downstream steps (hard query list + adaptive matching) are
+    # indexed by query id / file stem.
+    valid_mask = ~np.isnan(X_full).any(axis=1)
+    valid_indices = np.where(valid_mask)[0]
+    invalid_indices = np.where(~valid_mask)[0]
+
+    if invalid_indices.size > 0:
+        print(f"Found {invalid_indices.size} queries with NaN features.")
+        print("  -> They will be treated as HARD by default (conservative) to avoid missing hard queries.")
+
+    X_valid = X_full[valid_mask]
+
+    # Scale and predict (valid rows only)
+    X_scaled = scaler.transform(X_valid)
+    probs_valid = model.predict_proba(X_scaled)[:, 1]  # Probability of being hard
+
+    # Expand back to full length (aligned with original query indices)
+    probs = np.full((X_full.shape[0],), np.nan, dtype="float32")
+    probs[valid_indices] = probs_valid.astype("float32")
     
     # Determine which threshold to use
     if args.calibrate_threshold and "labels" in features:
@@ -167,15 +178,20 @@ def main(args):
             print(f"\n⚠️  Warning: Cannot calibrate threshold - labels not available in feature file")
             print(f"  Using saved threshold: {optimal_threshold:.3f}")
     
-    # Apply threshold (probs is now probability of being hard)
-    is_hard = probs >= optimal_threshold  # If P(hard) >= threshold → Hard
-    is_easy = ~is_hard                    # If P(hard) < threshold → Easy
-    
-    num_queries = len(probs)
-    num_easy = is_easy.sum()
-    num_hard = is_hard.sum()
-    
-    # Get hard query indices (for image matching)
+    # Apply threshold on valid rows and expand to full-length decision arrays.
+    # Invalid rows (NaNs) are treated as HARD by default.
+    is_hard = np.zeros((X_full.shape[0],), dtype=bool)
+    is_hard[valid_indices] = probs_valid >= optimal_threshold  # valid predictions
+    if invalid_indices.size > 0:
+        is_hard[invalid_indices] = True
+
+    is_easy = ~is_hard
+
+    num_queries = is_hard.shape[0]
+    num_easy = int(is_easy.sum())
+    num_hard = int(is_hard.sum())
+
+    # Get hard query indices (for image matching) in ORIGINAL query index space
     hard_query_indices = np.where(is_hard)[0]
     
     # Save outputs
@@ -191,13 +207,17 @@ def main(args):
     }
     
     if "labels" in features:
-        save_dict["labels"] = features["labels"][valid_mask].astype("float32")
-        # Compute accuracy if labels available
+        # Save labels in original index space
+        save_dict["labels"] = features["labels"].astype("float32")
+
+        # Compute accuracy on VALID rows only (NaN rows have no reliable prediction)
+        labels_valid = features["labels"][valid_mask].astype("float32")
+        is_easy_valid = is_easy[valid_mask]
         # labels: 1 = correct, 0 = wrong
         # is_easy: True = easy, False = hard
         # So: is_easy should match (labels == 1)
-        accuracy = (is_easy.astype(int) == save_dict["labels"]).mean()
-        save_dict["accuracy"] = accuracy
+        accuracy = (is_easy_valid.astype(int) == labels_valid).mean()
+        save_dict["accuracy_valid_only"] = float(accuracy)
     
     output_path = Path(args.output_path)
     np.savez_compressed(output_path, **save_dict)
@@ -224,18 +244,18 @@ def main(args):
     print(f"\nPredictions:")
     print(f"  Hard (predicted P(hard) >= {optimal_threshold:.3f}, apply image matching): {num_hard} ({100*num_hard/num_queries:.1f}%)")
     print(f"  Easy (predicted P(hard) < {optimal_threshold:.3f}, skip image matching): {num_easy} ({100*num_easy/num_queries:.1f}%)")
-    print(f"\nPredicted probability statistics:")
-    print(f"  Min: {probs.min():.3f}, Max: {probs.max():.3f}")
-    print(f"  Mean: {probs.mean():.3f}, Median: {np.median(probs):.3f}")
+    print(f"\nPredicted probability statistics (valid rows only):")
+    print(f"  Min: {np.nanmin(probs):.3f}, Max: {np.nanmax(probs):.3f}")
+    print(f"  Mean: {np.nanmean(probs):.3f}, Median: {np.nanmedian(probs):.3f}")
     
     if "labels" in features:
-        actually_wrong = (save_dict["labels"] == 0).sum()
-        actually_correct = (save_dict["labels"] == 1).sum()
+        actually_wrong = int((save_dict["labels"] == 0).sum())
+        actually_correct = int((save_dict["labels"] == 1).sum())
         print(f"\nGround truth (if available):")
         print(f"  Actually wrong: {actually_wrong} ({100*actually_wrong/num_queries:.1f}%)")
         print(f"  Actually correct: {actually_correct} ({100*actually_correct/num_queries:.1f}%)")
-        if "accuracy" in save_dict:
-            print(f"  Detection accuracy: {save_dict['accuracy']*100:.1f}%")
+        if "accuracy_valid_only" in save_dict:
+            print(f"  Detection accuracy (valid rows only): {save_dict['accuracy_valid_only']*100:.1f}%")
 
 
 if __name__ == "__main__":
