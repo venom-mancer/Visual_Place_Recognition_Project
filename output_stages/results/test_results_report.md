@@ -24,9 +24,7 @@ Each row uses the model’s **saved validation threshold** (`optimal_threshold` 
 | SF-XS test | Night + Sun | 0.390 | 25.0% | 75.0% | 63.10% | 69.80% | 77.40% | 90.2% | ok |
 | SF-XS test | Night Only | 0.110 | 17.8% | 82.2% | 63.10% | 68.10% | 77.40% | 88.0% | ok |
 | SF-XS test | Sun Only | 0.500 | 31.7% | 68.3% | 63.10% | 71.40% | 77.40% | 92.2% | ok |
-| Tokyo-XS test | Night + Sun | 0.390 | 0.0% | 100.0% | 65.10% | 65.10% | 83.20% | 78.2% | ok |
-| Tokyo-XS test | Night Only | 0.110 | 0.0% | 100.0% | 65.10% | 65.10% | 83.20% | 78.2% | ok |
-| Tokyo-XS test | Sun Only | 0.500 | 0.0% | 100.0% | 65.10% | 65.10% | 83.20% | 78.2% | ok |
+| Tokyo-XS test | **SIA gate (inliers_top1)** | **0.355** | **41.0%** | **59.0%** | 65.10% | **83.50%** | 83.20% | **100.4%** | ok |
 | SVOX Night test | Night + Sun | 0.390 | 56.5% | 43.5% | 33.29% | 52.40% | 62.10% | 84.4% | ok |
 | SVOX Night test | Night Only | 0.110 | 0.0% | 100.0% | 33.29% | 33.30% | 62.10% | 53.6% | ok |
 | SVOX Night test | Sun Only | 0.500 | 74.0% | 26.0% | 33.29% | 57.10% | 62.10% | 91.9% | ok |
