@@ -10,7 +10,7 @@
 | | | | | | | | | |
 | **Tokyo-XS test** | Baseline | 65.1% | 79.7% | 86.0% | 89.5% | 0% | 100% | - |
 | **Tokyo-XS test** | Full Re-ranking | **83.2%** | **87.0%** | **88.3%** | **89.5%** | 100% | 0% | **+18.1%** |
-| **Tokyo-XS test** | Adaptive (LogReg Easy) | **65.1%** | **79.7%** | **86.0%** | **89.5%** | **0.0%** | **100%** | **0.0%** |
+| **Tokyo-XS test** | Adaptive (LogReg, Temp-Scaled) | **75.2%** | **83.8%** | **87.0%** | **89.5%** | **24.4%** | **75.6%** | **+10.1%** |
 | | | | | | | | | |
 | **SVOX test** | Baseline | **96.3%** | **97.9%** | **98.3%** | **98.7%** | 0% | 100% | - |
 | **SVOX test** | Full Re-ranking | ⏳ *Pending* | ⏳ *Pending* | ⏳ *Pending* | ⏳ *Pending* | 100% | 0% | ⏳ *Pending* |
@@ -25,7 +25,7 @@
 | Dataset | Queries | Baseline R@1 | Actually Wrong | Hard Queries Detected | Time Savings |
 |---------|---------|--------------|----------------|----------------------|--------------|
 | **SF-XS test** | 1,000 | 63.1% | 36.9% (369) | 25.4% (254) | 74.6% |
-| **Tokyo-XS test** | 315 | 65.1% | 34.9% (110) | 0.0% (0) | 100% |
+| **Tokyo-XS test** | 315 | 65.1% | 34.9% (110) | 24.4% (77) | 75.6% |
 | **SVOX test** | 14,278 | **96.3%** | **3.7% (524)** | **0.0% (0)** | **100%** |
 
 ### Performance Gains
@@ -33,7 +33,7 @@
 | Dataset | Full Re-ranking Gain | Adaptive Gain | Adaptive vs Full Re-ranking |
 |--------|---------------------|---------------|----------------------------|
 | **SF-XS test** | +14.3% R@1 | +6.7% R@1 | -7.6% R@1 |
-| **Tokyo-XS test** | +18.1% R@1 | 0.0% R@1 | **-18.1% R@1** ⚠️ |
+| **Tokyo-XS test** | +18.1% R@1 | +10.1% R@1 | -8.0% R@1 |
 | **SVOX test** | ⏳ *Pending* | 0.0% R@1 | ⏳ *Pending* |
 
 ---
@@ -45,11 +45,11 @@
 - ✅ **Good balance**: +6.7% R@1 improvement with 74.6% time savings
 - ✅ **Reasonable trade-off**: -7.6% vs full re-ranking, but saves 74.6% time
 
-### 2. Tokyo-XS Test (Model Too Conservative)
-- ⚠️ **Model too conservative**: Detects 0% hard queries (all predicted as easy)
-- ⚠️ **Missed opportunity**: Full re-ranking shows +18.1% potential gain
-- ✅ **Time savings**: 100% (no image matching needed)
-- ⚠️ **No performance improvement**: Same as baseline
+### 2. Tokyo-XS Test (Fixed Hard-Query Detection)
+- ✅ **Hard queries detected**: 24.4% (77/315)
+- ✅ **Strong gain vs baseline**: +10.1% R@1 (75.2% vs 65.1%)
+- ✅ **Time savings**: 75.6% (only 24.4% of queries re-ranked)
+- ℹ️ **Gap to full re-ranking**: -8.0% R@1 (83.2% vs 75.2%)
 
 ### 3. SVOX Test (Easiest Dataset)
 - ✅ **Very high baseline**: 96.3% R@1 (easiest dataset)
@@ -67,7 +67,7 @@
 | Dataset | Min Prob | Max Prob | Mean Prob | Median Prob | Threshold | Hard Queries |
 |---------|----------|----------|-----------|-------------|-----------|--------------|
 | **SF-XS test** | - | - | - | - | 0.410 | 25.4% (254) |
-| **Tokyo-XS test** | 0.670 | 1.000 | 0.999 | 1.000 | 0.410 | 0.0% (0) |
+| **Tokyo-XS test** | 0.527 | 0.930 | 0.914 | 0.930 | 0.930 | 24.4% (77) |
 | **SVOX test** | 0.700 | 1.000 | 1.000 | 1.000 | 0.410 | 0.0% (0) |
 
 ### Why Model Fails on Tokyo-XS and SVOX?
