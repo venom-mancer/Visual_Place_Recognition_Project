@@ -141,13 +141,23 @@ def main(args):
     
     # Determine which threshold to use
     if args.calibrate_threshold and "labels" in features:
-        # Calibrate threshold on test set (if labels available)
-        labels = features["labels"][valid_mask].astype("float32")
-        # labels: 1 = correct/easy, 0 = wrong/hard
+        # Calibrate threshold on the target dataset (requires labels in feature file).
+        #
+        # IMPORTANT:
+        # - Our adaptive decision is "HARD => run matching/rerank", "EASY => skip".
+        # - For easy_score models, probs_valid = P(easy). Hard decision is probs_valid < t.
+        # - For hard_score models, probs_valid = P(hard). Hard decision is probs_valid >= t.
+        #
+        # So for calibration we always calibrate in "hard space":
+        #   y_true_hard: 1=hard, 0=easy
+        #   y_prob_hard: model's predicted probability of hard
+        labels = features["labels"][valid_mask].astype("float32")  # 1=correct(easy), 0=wrong(hard)
+        y_true_hard = (1 - labels).astype("float32")
+
         if target_type == "easy_score":
-            y_true = labels  # 1 = easy, 0 = hard
+            y_prob_hard = (1.0 - probs_valid).astype("float32")  # P(hard) = 1 - P(easy)
         else:
-            y_true = (1 - labels).astype("float32")  # 1 = hard, 0 = easy
+            y_prob_hard = probs_valid.astype("float32")  # already P(hard)
         
         print(f"\n{'='*70}")
         print(f"Calibrating threshold on test set...")
@@ -156,29 +166,37 @@ def main(args):
         if args.target_hard_rate is not None:
             # Target-based calibration: achieve specific hard query rate
             target_rate = args.target_hard_rate
-            optimal_threshold, achieved_rate = find_optimal_threshold(
-                y_true, probs_valid, method="rate", target_rate=target_rate
+            hard_threshold, achieved_rate = find_optimal_threshold(
+                y_true_hard, y_prob_hard, method="rate", target_rate=target_rate
             )
             print(f"  Method: Target hard query rate ({target_rate*100:.1f}%)")
-            print(f"  Optimal threshold: {optimal_threshold:.3f}")
+            print(f"  Optimal hard-threshold: {hard_threshold:.3f}")
             print(f"  Achieved hard query rate: {achieved_rate*100:.1f}%")
         else:
             # F1-based calibration: maximize F1-score
-            optimal_threshold, best_f1 = find_optimal_threshold(
-                y_true, probs_valid, method="f1"
+            hard_threshold, best_f1 = find_optimal_threshold(
+                y_true_hard, y_prob_hard, method="f1"
             )
-            y_pred = (probs >= optimal_threshold).astype(int)
-            precision = precision_score(y_true, y_pred, zero_division=0)
-            recall = recall_score(y_true, y_pred, zero_division=0)
+            y_pred_hard = (y_prob_hard >= hard_threshold).astype(int)
+            precision = precision_score(y_true_hard, y_pred_hard, zero_division=0)
+            recall = recall_score(y_true_hard, y_pred_hard, zero_division=0)
             
             print(f"  Method: Maximize F1-score")
-            print(f"  Optimal threshold: {optimal_threshold:.3f}")
+            print(f"  Optimal hard-threshold: {hard_threshold:.3f}")
             print(f"  F1-score: {best_f1:.4f}")
             print(f"  Precision: {precision:.4f}")
             print(f"  Recall: {recall:.4f}")
         
         print(f"  (Saved threshold was {saved_threshold:.3f})")
         threshold_source = "calibrated_on_test"
+
+        # Convert calibrated hard-threshold into the script's decision threshold space:
+        # - easy_score: hard if (1 - P(easy)) >= hard_threshold  -> P(easy) <= 1 - hard_threshold
+        # - hard_score: hard if P(hard) >= hard_threshold -> same numeric threshold
+        if target_type == "easy_score":
+            optimal_threshold = float(1.0 - hard_threshold)
+        else:
+            optimal_threshold = float(hard_threshold)
     else:
         # Use saved threshold from validation
         optimal_threshold = saved_threshold
@@ -204,6 +222,60 @@ def main(args):
     if invalid_indices.size > 0:
         is_hard[invalid_indices] = True
         is_easy[invalid_indices] = False
+
+    # Optional safety net: enforce a minimum hard-query rate.
+    # This helps when a saved validation threshold generalizes poorly (e.g., Tokyo) and yields ~0 hard queries,
+    # which would skip matching/reranking entirely.
+    if args.min_hard_rate is not None:
+        min_rate = float(args.min_hard_rate)
+        if not (0.0 <= min_rate <= 1.0):
+            raise ValueError("--min-hard-rate must be in [0.0, 1.0]")
+
+        current_hard = int(is_hard.sum())
+        target_hard = int(np.ceil(min_rate * X_full.shape[0]))
+        if current_hard < target_hard:
+            need = target_hard - current_hard
+
+            # Rank candidates by "hardness" proxy based on probabilities:
+            # - easy_score: lower P(easy) => more likely hard
+            # - hard_score: higher P(hard) => more likely hard
+            if target_type == "easy_score":
+                scores = probs.copy()  # P(easy)
+                # candidate order: ascending P(easy)
+                order = np.argsort(scores, kind="stable")
+            else:
+                scores = probs.copy()  # P(hard)
+                # candidate order: descending P(hard)
+                order = np.argsort(-scores, kind="stable")
+
+            added = 0
+            for idx in order:
+                if is_hard[idx]:
+                    continue
+                # Avoid selecting NaN-only rows again (already hard) and skip if score is nan
+                if np.isnan(scores[idx]):
+                    continue
+                is_hard[idx] = True
+                is_easy[idx] = False
+                added += 1
+                if added >= need:
+                    break
+
+            if added < need:
+                # As a last resort (e.g., many identical/NaN scores), mark remaining by index.
+                for idx in range(X_full.shape[0]):
+                    if is_hard[idx]:
+                        continue
+                    is_hard[idx] = True
+                    is_easy[idx] = False
+                    added += 1
+                    if added >= need:
+                        break
+
+            print(
+                f"\nApplied --min-hard-rate={min_rate:.3f}: "
+                f"hard queries increased from {current_hard} to {int(is_hard.sum())}."
+            )
 
     num_queries = is_hard.shape[0]
     num_easy = int(is_easy.sum())
@@ -324,6 +396,13 @@ if __name__ == "__main__":
         type=float,
         default=None,
         help="Target hard query rate (0.0-1.0) for threshold calibration. E.g., 0.30 for 30%% hard queries",
+    )
+    parser.add_argument(
+        "--min-hard-rate",
+        type=float,
+        default=None,
+        help="Ensure at least this fraction of queries are marked HARD (0.0-1.0). "
+             "Useful when a saved validation threshold generalizes poorly and predicts 0%% hard queries.",
     )
     
     args = parser.parse_args()
