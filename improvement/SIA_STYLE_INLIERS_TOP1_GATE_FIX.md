@@ -1,4 +1,4 @@
-## SIA-style Fix: `inliers_top1` gate (solves Tokyo “skip reranking”)
+## Amir_V2 Fix: `inliers_top1` gate (solves Tokyo “skip reranking”)
 
 ### Problem (what we saw on Tokyo)
 
@@ -10,9 +10,9 @@ This is **not** just an indexing issue — it’s mainly a **generalization / ca
 - The 3-way retrieval-feature models (the “easy_score” LR models trained/validated on other data) can output **P(easy) ≈ 1.0** for almost all Tokyo queries, including wrong ones.
 - With a saved SF-XS validation threshold, this yields **hard ≈ 0%**.
 
-### Why SIA v2 doesn’t skip
+### Why Amir_V2 doesn’t skip
 
-SIA v2 uses a gate based on a single robust feature:
+Amir_V2 uses a gate based on a single robust feature:
 - **`inliers_top1`** = number of inliers between query and the retrieval top‑1 candidate
 
 This feature is:
@@ -26,16 +26,16 @@ So the gate produces a **non-empty hard subset** on Tokyo and triggers reranking
 
 ## Implementation on `Amir_V2`
 
-### New scripts
+### New scripts (Amir_V2)
 
-- `tools/sia_inliers_top1_train.py`
+- `tools/sia_inliers_top1_train.py` (legacy name; same logic)
   - Builds a training set from `preds/*.txt` + `.torch` (top‑20 is fine; we only read the first match result)
   - Trains Logistic Regression to predict **P(top1_correct)** from **`inliers_top1`**
   - Chooses:
     - **C** by validation ROC-AUC
     - **threshold** by maximizing **adaptive Recall@1** on validation
 
-- `tools/sia_inliers_top1_apply.py`
+- `tools/sia_inliers_top1_apply.py` (legacy name; same logic)
   - Applies the trained gate to a dataset split and writes:
     - `.npz` with `probs/is_easy/is_hard/hard_query_indices`
     - `.txt` list of hard query IDs
@@ -58,7 +58,7 @@ Training output (printed):
 
 ---
 
-## Tokyo-XS results (after SIA-style gate)
+## Tokyo-XS results (after Amir_V2 inliers_top1 gate)
 
 Applied gate on:
 - `log_tokyo_xs_test/2025-12-18_14-43-02/preds`
@@ -77,7 +77,7 @@ Outputs:
 
 - **Baseline retrieval (CosPlace)**: **65.1%**
 - **Full reranking (SuperPoint+LG)**: **83.17%**
-- **Adaptive (SIA-style inliers_top1 gate)**: **83.5%**
+- **Adaptive (Amir_V2 inliers_top1 gate)**: **83.5%**
 
 This means the SIA-style gate:
 - avoids the Tokyo “skip” failure mode (hard% is not 0)
