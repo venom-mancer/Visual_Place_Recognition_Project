@@ -47,6 +47,18 @@ Note: the table numbers were computed using already-available top‑K inliers fo
 - Top‑1 matching for all queries (gate feature)
 - Top‑K matching **only** for predicted hard queries
 
+**Online-time formula (per dataset+model)**:
+
+\[
+T_{\text{total}} \approx T_{\text{retrieval}} + T_{\text{top1}} + \left(\frac{\text{Hard\%}}{100}\right)\cdot T_{\text{topK(full)}}
+\]
+
+Where:
+- \(T_{\text{retrieval}}\): compute the top‑K candidates (needed to know the top‑1/top‑K to match against)
+- \(T_{\text{top1}}\): run image matching for **only the retrieved top‑1** for every query (to get `inliers_top1`)
+- \(T_{\text{topK(full)}}\): time to run top‑K matching for **all** queries (full pipeline matching cost)
+- \(\frac{\text{Hard\%}}{100}\cdot T_{\text{topK(full)}}\): estimated top‑K matching cost for **hard queries only**
+
 **How times were computed**:
 - **Retrieval**: from dataset `info.log` when available (SF‑XS, Tokyo‑XS), else N/A
 - **Top‑1 match**: measured by running `match_queries_preds.py --num-preds 1` into fresh `temp/` folders
