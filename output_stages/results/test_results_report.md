@@ -38,6 +38,38 @@ Note: the table numbers were computed using already-available top‑K inliers fo
 | SVOX Sun test | Night Only | 0.500 | 29.2% | 70.8% | 62.30% | 78.10% | 84.50% | 92.4% | ok |
 | SVOX Sun test | Sun Only | 0.500 | 29.5% | 70.5% | 62.30% | 78.10% | 84.50% | 92.4% | ok |
 
+---
+
+## Execution Time (True Amir_V2 Pipeline) — Re-evaluated
+
+**Definition (true pipeline)**:
+- Retrieval
+- Top‑1 matching for all queries (gate feature)
+- Top‑K matching **only** for predicted hard queries
+
+**How times were computed**:
+- **Retrieval**: from dataset `info.log` when available (SF‑XS, Tokyo‑XS), else N/A
+- **Top‑1 match**: measured by running `match_queries_preds.py --num-preds 1` into fresh `temp/` folders
+- **Full top‑K match**: approximated by mtime-span of an existing “full top‑20 inliers” directory
+- **Top‑K hard-only**: estimated as `full_topK_time * hard_fraction`
+
+> These are execution-time estimates for matching cost; evaluation time is negligible compared to matching.
+
+| Dataset | Model | Hard% | Time Saving | Retrieval | Top-1 match | Top-K match (hard only, est.) | Total (est.) | Full pipeline (est.) |
+|---------|-------|-------|------------|----------|------------|-------------------------------|-------------|----------------------|
+| SF-XS test | Night + Sun | 35.1% | 64.9% | 9.2m | 8.7m | 54.7m | 1.21h | 2.75h |
+| SF-XS test | Night Only | 35.5% | 64.5% | 9.2m | 8.7m | 55.3m | 1.22h | 2.75h |
+| SF-XS test | Sun Only | 35.6% | 64.4% | 9.2m | 8.7m | 55.4m | 1.22h | 2.75h |
+| Tokyo-XS test | Night + Sun | 41.0% | 59.0% | 3.0m | 2.7m | 20.0m | 25.8m | 52.0m |
+| Tokyo-XS test | Night Only | 41.3% | 58.7% | 3.0m | 2.7m | 20.2m | 26.0m | 52.0m |
+| Tokyo-XS test | Sun Only | 41.3% | 58.7% | 3.0m | 2.7m | 20.2m | 26.0m | 52.0m |
+| SVOX Night test | Night + Sun | 59.7% | 40.3% | N/A | 6.9m | 3.33h | 3.44h | 5.58h |
+| SVOX Night test | Night Only | 60.0% | 40.0% | N/A | 6.9m | 3.35h | 3.46h | 5.58h |
+| SVOX Night test | Sun Only | 60.6% | 39.4% | N/A | 6.9m | 3.38h | 3.50h | 5.58h |
+| SVOX Sun test | Night + Sun | 28.6% | 71.4% | N/A | 7.2m | 1.62h | 1.74h | 5.68h |
+| SVOX Sun test | Night Only | 29.2% | 70.8% | N/A | 7.2m | 1.66h | 1.78h | 5.68h |
+| SVOX Sun test | Sun Only | 29.5% | 70.5% | N/A | 7.2m | 1.68h | 1.80h | 5.68h |
+
 ### SF-XS Test ✅
 
 | Metric | Value |
