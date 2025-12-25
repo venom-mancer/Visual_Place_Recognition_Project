@@ -1,8 +1,8 @@
-## Amir_V2 Improvements (Tokyo hard-query detection fix)
+## Amir_V2 Improvements
 
 This folder documents improvements made on the **`Amir_V2`** branch without modifying the original branch (`Amir_Extention_6.1`).
 
-- **Main fix**: Tokyo hard-query detection was missing many hard queries due to **index misalignment** (details in the doc below).
-- **Doc**: see `improvement/TOKYO_HARD_QUERY_DETECTION_FIX.md`.
+- **Fix 1 (indexing)**: Tokyo hard-query detection could be wrong due to **index misalignment** (see `improvement/TOKYO_HARD_QUERY_DETECTION_FIX.md`).
+- **Fix 2 (Amir_V2 gate)**: Switched to an `inliers_top1` gate to prevent “0 hard queries” generalization failure (see `improvement/AMIR_V2_INLIERS_TOP1_GATE_FIX.md`).
 
 

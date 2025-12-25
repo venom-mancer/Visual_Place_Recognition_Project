@@ -16,8 +16,12 @@
 Each row uses the model’s **saved validation threshold** (`optimal_threshold` from the `.pkl` bundle).
 
 **Evaluation rule (true adaptive behavior):**
-- **Hard queries**: use full inliers (simulate “run matching + re-rank”)
-- **Easy queries**: skip re-ranking (empty inliers → retrieval-only ordering)
+- **Step 1 (gate feature)**: run **top‑1 matching for all queries** to compute `inliers_top1`
+- **Step 2 (gate)**: Logistic Regression predicts **hard vs easy**
+- **Step 3 (expensive step)**: run **top‑K matching only for hard queries**, skip matching for easy queries
+- **Step 4 (reranking)**: re-rank only the hard subset; easy subset stays retrieval-only
+
+Note: the table numbers were computed using already-available top‑K inliers folders for speed, but the *logic matches* the true pipeline above (hard uses inliers; easy skips reranking).
 
 | Dataset | Model | Threshold Used | Hard Queries Detected | Time Savings | Baseline R@1 | Adaptive R@1 | Full Re-ranking R@1 | Ratio | Note |
 |---------|-------|----------------|----------------------|-------------|-------------|-------------|---------------------|-------|------|
