@@ -23,20 +23,20 @@ Each row uses the model’s **saved validation threshold** (`optimal_threshold` 
 
 Note: the table numbers were computed using already-available top‑K inliers folders for speed, but the *logic matches* the true pipeline above (hard uses inliers; easy skips reranking).
 
-| Dataset | Model | Threshold Used | Hard Queries Detected | Time Savings | Baseline R@1 | Adaptive R@1 | Full Re-ranking R@1 | Ratio | Note |
-|---------|-------|----------------|----------------------|-------------|-------------|-------------|---------------------|-------|------|
-| SF-XS test | Night + Sun | 0.355 | 35.1% | 64.9% | 63.10% | 76.00% | 77.40% | 98.2% | ok |
-| SF-XS test | Night Only | 0.500 | 35.5% | 64.5% | 63.10% | 76.10% | 77.40% | 98.3% | ok |
-| SF-XS test | Sun Only | 0.500 | 35.6% | 64.4% | 63.10% | 76.10% | 77.40% | 98.3% | ok |
-| Tokyo-XS test | Night + Sun | 0.355 | 41.0% | 59.0% | 65.10% | 83.50% | 83.20% | 100.4% | ok |
-| Tokyo-XS test | Night Only | 0.500 | 41.3% | 58.7% | 65.10% | 83.20% | 83.20% | 100.0% | ok |
-| Tokyo-XS test | Sun Only | 0.500 | 41.3% | 58.7% | 65.10% | 83.20% | 83.20% | 100.0% | ok |
-| SVOX Night test | Night + Sun | 0.355 | 59.7% | 40.3% | 33.29% | 58.10% | 62.10% | 93.6% | ok |
-| SVOX Night test | Night Only | 0.500 | 60.0% | 40.0% | 33.29% | 58.10% | 62.10% | 93.6% | ok |
-| SVOX Night test | Sun Only | 0.500 | 60.6% | 39.4% | 33.29% | 58.30% | 62.10% | 93.9% | ok |
-| SVOX Sun test | Night + Sun | 0.355 | 28.6% | 71.4% | 62.30% | 77.50% | 84.50% | 91.7% | ok |
-| SVOX Sun test | Night Only | 0.500 | 29.2% | 70.8% | 62.30% | 78.10% | 84.50% | 92.4% | ok |
-| SVOX Sun test | Sun Only | 0.500 | 29.5% | 70.5% | 62.30% | 78.10% | 84.50% | 92.4% | ok |
+| Dataset | Model | Hard% | Time Saving | Baseline R@1 | Adaptive R@1 | Full R@1 | dR1 vs Baseline | dR1 vs Full |
+|---------|-------|-------|------------|-------------|-------------|--------|----------------|------------|
+| SF-XS test | Night + Sun | 35.1% | 64.9% | 63.10% | 76.00% | 77.40% | +12.90% | -1.40% |
+| SF-XS test | Night Only | 35.5% | 64.5% | 63.10% | 76.10% | 77.40% | +13.00% | -1.30% |
+| SF-XS test | Sun Only | 35.6% | 64.4% | 63.10% | 76.10% | 77.40% | +13.00% | -1.30% |
+| Tokyo-XS test | Night + Sun | 41.0% | 59.0% | 65.10% | 83.50% | 83.20% | +18.40% | +0.30% |
+| Tokyo-XS test | Night Only | 41.3% | 58.7% | 65.10% | 83.20% | 83.20% | +18.10% | +0.00% |
+| Tokyo-XS test | Sun Only | 41.3% | 58.7% | 65.10% | 83.20% | 83.20% | +18.10% | +0.00% |
+| SVOX Night test | Night + Sun | 59.7% | 40.3% | 33.29% | 58.10% | 62.10% | +24.81% | -4.00% |
+| SVOX Night test | Night Only | 60.0% | 40.0% | 33.29% | 58.10% | 62.10% | +24.81% | -4.00% |
+| SVOX Night test | Sun Only | 60.6% | 39.4% | 33.29% | 58.30% | 62.10% | +25.01% | -3.80% |
+| SVOX Sun test | Night + Sun | 28.6% | 71.4% | 62.30% | 77.50% | 84.50% | +15.20% | -7.00% |
+| SVOX Sun test | Night Only | 29.2% | 70.8% | 62.30% | 78.10% | 84.50% | +15.80% | -6.40% |
+| SVOX Sun test | Sun Only | 29.5% | 70.5% | 62.30% | 78.10% | 84.50% | +15.80% | -6.40% |
 
 ---
 
