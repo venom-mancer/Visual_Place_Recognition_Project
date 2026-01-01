@@ -63,7 +63,7 @@ def main(args):
     matcher = get_matcher(matcher_name, device=device)
     preds_folder = args.preds_dir
     
-    # Load hard query indices (expected to be query IDs, typically matching preds/*.txt stem)
+    # Load hard query indices
     hard_query_indices = load_hard_query_indices(args.hard_queries_list)
     print(f"Loaded {len(hard_query_indices)} hard query indices from {args.hard_queries_list}")
     
@@ -74,19 +74,7 @@ def main(args):
     txt_files.sort(key=lambda x: int(Path(x).stem))
     
     total_queries = len(txt_files)
-    available_query_ids = [int(Path(p).stem) for p in txt_files]
-    available_query_ids_set = set(available_query_ids)
-
-    missing_requested = sorted(list(hard_query_indices - available_query_ids_set))
-    if missing_requested:
-        preview = ", ".join(map(str, missing_requested[:10]))
-        suffix = "..." if len(missing_requested) > 10 else ""
-        print(
-            f"WARNING: {len(missing_requested)} requested hard query ids do not exist in preds-dir. "
-            f"First few: {preview}{suffix}"
-        )
-
-    hard_queries_to_process = [qid for qid in available_query_ids if qid in hard_query_indices]
+    hard_queries_to_process = [i for i in range(total_queries) if i in hard_query_indices]
     
     print(f"Total queries: {total_queries}")
     print(f"Hard queries to process: {len(hard_queries_to_process)}")
@@ -98,18 +86,19 @@ def main(args):
     processed = 0
     skipped = 0
     
-    for txt_file in tqdm(txt_files, desc="Processing queries"):
-        q_id = int(Path(txt_file).stem)
-        if q_id not in hard_query_indices:
+    for idx, txt_file in enumerate(tqdm(txt_files, desc="Processing queries")):
+        if idx not in hard_query_indices:
             # Easy query: create empty file for compatibility
-            out_file = output_folder.joinpath(f"{q_id}.torch")
+            q_num = Path(txt_file).stem
+            out_file = output_folder.joinpath(f"{q_num}.torch")
             if not out_file.exists():
                 torch.save([], out_file)  # Empty list for easy queries
             skipped += 1
             continue
         
         # Hard query: do actual image matching
-        out_file = output_folder.joinpath(f"{q_id}.torch")
+        q_num = Path(txt_file).stem
+        out_file = output_folder.joinpath(f"{q_num}.torch")
         if out_file.exists():
             continue
         

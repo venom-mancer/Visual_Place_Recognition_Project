@@ -100,64 +100,34 @@ def main(args):
     feature_names = bundle["feature_names"]
     saved_threshold = bundle.get("optimal_threshold", 0.5)
     threshold_method = bundle.get("threshold_method", "f1")
-    # Support both model conventions:
-    # - easy_score: 1 = easy/correct, 0 = hard/wrong
-    # - hard_score: 1 = hard/wrong, 0 = easy/correct
+    # This project uses "hard_score" models by default (1 = hard/wrong, 0 = easy/correct).
     target_type = bundle.get("target_type", "hard_score")
     
     print(f"Loaded model: {args.model_path}")
     print(f"  Features: {', '.join(feature_names)} ({len(feature_names)} features)")
-    if target_type == "easy_score":
-        print(f"  Target: {target_type} (1 = easy/correct, 0 = hard/wrong)")
-    else:
-        print(f"  Target: {target_type} (1 = hard/wrong, 0 = easy/correct)")
+    print(f"  Target: {target_type} (1 = hard/wrong, 0 = easy/correct)")
     print(f"  Saved threshold: {saved_threshold:.3f} (method: {threshold_method})")
     
     # Load features
     features = load_feature_file(args.feature_path)
-    X_full = build_feature_matrix(features, feature_names)
-
-    # Handle NaNs: keep original indexing aligned with preds/*.txt order.
-    # Important for Tokyo (and other sets): if any queries have NaNs, we must NOT
-    # drop them because downstream steps (hard query list + adaptive matching) are
-    # indexed by query id / file stem.
-    valid_mask = ~np.isnan(X_full).any(axis=1)
-    valid_indices = np.where(valid_mask)[0]
-    invalid_indices = np.where(~valid_mask)[0]
-
-    if invalid_indices.size > 0:
-        print(f"Found {invalid_indices.size} queries with NaN features.")
-        print("  -> They will be treated as HARD by default (conservative) to avoid missing hard queries.")
-
-    X_valid = X_full[valid_mask]
-
-    # Scale and predict (valid rows only)
-    X_scaled = scaler.transform(X_valid)
-    probs_valid = model.predict_proba(X_scaled)[:, 1]  # P(target==1): depends on target_type
-
-    # Expand back to full length (aligned with original query indices)
-    probs = np.full((X_full.shape[0],), np.nan, dtype="float32")
-    probs[valid_indices] = probs_valid.astype("float32")
+    X = build_feature_matrix(features, feature_names)
+    
+    # Handle NaNs
+    valid_mask = ~np.isnan(X).any(axis=1)
+    X = X[valid_mask]
+    
+    if (~valid_mask).sum() > 0:
+        print(f"Removed {(~valid_mask).sum()} queries with NaN features")
+    
+    # Scale and predict
+    X_scaled = scaler.transform(X)
+    probs = model.predict_proba(X_scaled)[:, 1]  # Probability of being hard
     
     # Determine which threshold to use
     if args.calibrate_threshold and "labels" in features:
-        # Calibrate threshold on the target dataset (requires labels in feature file).
-        #
-        # IMPORTANT:
-        # - Our adaptive decision is "HARD => run matching/rerank", "EASY => skip".
-        # - For easy_score models, probs_valid = P(easy). Hard decision is probs_valid < t.
-        # - For hard_score models, probs_valid = P(hard). Hard decision is probs_valid >= t.
-        #
-        # So for calibration we always calibrate in "hard space":
-        #   y_true_hard: 1=hard, 0=easy
-        #   y_prob_hard: model's predicted probability of hard
-        labels = features["labels"][valid_mask].astype("float32")  # 1=correct(easy), 0=wrong(hard)
-        y_true_hard = (1 - labels).astype("float32")
-
-        if target_type == "easy_score":
-            y_prob_hard = (1.0 - probs_valid).astype("float32")  # P(hard) = 1 - P(easy)
-        else:
-            y_prob_hard = probs_valid.astype("float32")  # already P(hard)
+        # Calibrate threshold on test set (if labels available)
+        labels = features["labels"][valid_mask].astype("float32")
+        hard_score = (1 - labels).astype("float32")  # 1 = hard/wrong, 0 = easy/correct
         
         print(f"\n{'='*70}")
         print(f"Calibrating threshold on test set...")
@@ -166,37 +136,29 @@ def main(args):
         if args.target_hard_rate is not None:
             # Target-based calibration: achieve specific hard query rate
             target_rate = args.target_hard_rate
-            hard_threshold, achieved_rate = find_optimal_threshold(
-                y_true_hard, y_prob_hard, method="rate", target_rate=target_rate
+            optimal_threshold, achieved_rate = find_optimal_threshold(
+                hard_score, probs, method="rate", target_rate=target_rate
             )
             print(f"  Method: Target hard query rate ({target_rate*100:.1f}%)")
-            print(f"  Optimal hard-threshold: {hard_threshold:.3f}")
+            print(f"  Optimal threshold: {optimal_threshold:.3f}")
             print(f"  Achieved hard query rate: {achieved_rate*100:.1f}%")
         else:
             # F1-based calibration: maximize F1-score
-            hard_threshold, best_f1 = find_optimal_threshold(
-                y_true_hard, y_prob_hard, method="f1"
+            optimal_threshold, best_f1 = find_optimal_threshold(
+                hard_score, probs, method="f1"
             )
-            y_pred_hard = (y_prob_hard >= hard_threshold).astype(int)
-            precision = precision_score(y_true_hard, y_pred_hard, zero_division=0)
-            recall = recall_score(y_true_hard, y_pred_hard, zero_division=0)
+            y_pred = (probs >= optimal_threshold).astype(int)
+            precision = precision_score(hard_score, y_pred, zero_division=0)
+            recall = recall_score(hard_score, y_pred, zero_division=0)
             
             print(f"  Method: Maximize F1-score")
-            print(f"  Optimal hard-threshold: {hard_threshold:.3f}")
+            print(f"  Optimal threshold: {optimal_threshold:.3f}")
             print(f"  F1-score: {best_f1:.4f}")
             print(f"  Precision: {precision:.4f}")
             print(f"  Recall: {recall:.4f}")
         
         print(f"  (Saved threshold was {saved_threshold:.3f})")
         threshold_source = "calibrated_on_test"
-
-        # Convert calibrated hard-threshold into the script's decision threshold space:
-        # - easy_score: hard if (1 - P(easy)) >= hard_threshold  -> P(easy) <= 1 - hard_threshold
-        # - hard_score: hard if P(hard) >= hard_threshold -> same numeric threshold
-        if target_type == "easy_score":
-            optimal_threshold = float(1.0 - hard_threshold)
-        else:
-            optimal_threshold = float(hard_threshold)
     else:
         # Use saved threshold from validation
         optimal_threshold = saved_threshold
@@ -205,83 +167,15 @@ def main(args):
             print(f"\n⚠️  Warning: Cannot calibrate threshold - labels not available in feature file")
             print(f"  Using saved threshold: {optimal_threshold:.3f}")
     
-    # Apply threshold on valid rows and expand to full-length decision arrays.
-    # Invalid rows (NaNs) are treated as HARD by default (conservative).
-    is_easy = np.zeros((X_full.shape[0],), dtype=bool)
-    is_hard = np.zeros((X_full.shape[0],), dtype=bool)
-
-    if target_type == "easy_score":
-        # probs = P(easy/correct). Easy if prob >= threshold.
-        is_easy[valid_indices] = probs_valid >= optimal_threshold
-        is_hard[valid_indices] = ~is_easy[valid_indices]
-    else:
-        # probs = P(hard/wrong). Hard if prob >= threshold.
-        is_hard[valid_indices] = probs_valid >= optimal_threshold
-        is_easy[valid_indices] = ~is_hard[valid_indices]
-
-    if invalid_indices.size > 0:
-        is_hard[invalid_indices] = True
-        is_easy[invalid_indices] = False
-
-    # Optional safety net: enforce a minimum hard-query rate.
-    # This helps when a saved validation threshold generalizes poorly (e.g., Tokyo) and yields ~0 hard queries,
-    # which would skip matching/reranking entirely.
-    if args.min_hard_rate is not None:
-        min_rate = float(args.min_hard_rate)
-        if not (0.0 <= min_rate <= 1.0):
-            raise ValueError("--min-hard-rate must be in [0.0, 1.0]")
-
-        current_hard = int(is_hard.sum())
-        target_hard = int(np.ceil(min_rate * X_full.shape[0]))
-        if current_hard < target_hard:
-            need = target_hard - current_hard
-
-            # Rank candidates by "hardness" proxy based on probabilities:
-            # - easy_score: lower P(easy) => more likely hard
-            # - hard_score: higher P(hard) => more likely hard
-            if target_type == "easy_score":
-                scores = probs.copy()  # P(easy)
-                # candidate order: ascending P(easy)
-                order = np.argsort(scores, kind="stable")
-            else:
-                scores = probs.copy()  # P(hard)
-                # candidate order: descending P(hard)
-                order = np.argsort(-scores, kind="stable")
-
-            added = 0
-            for idx in order:
-                if is_hard[idx]:
-                    continue
-                # Avoid selecting NaN-only rows again (already hard) and skip if score is nan
-                if np.isnan(scores[idx]):
-                    continue
-                is_hard[idx] = True
-                is_easy[idx] = False
-                added += 1
-                if added >= need:
-                    break
-
-            if added < need:
-                # As a last resort (e.g., many identical/NaN scores), mark remaining by index.
-                for idx in range(X_full.shape[0]):
-                    if is_hard[idx]:
-                        continue
-                    is_hard[idx] = True
-                    is_easy[idx] = False
-                    added += 1
-                    if added >= need:
-                        break
-
-            print(
-                f"\nApplied --min-hard-rate={min_rate:.3f}: "
-                f"hard queries increased from {current_hard} to {int(is_hard.sum())}."
-            )
-
-    num_queries = is_hard.shape[0]
-    num_easy = int(is_easy.sum())
-    num_hard = int(is_hard.sum())
-
-    # Get hard query indices (for image matching) in ORIGINAL query index space
+    # Apply threshold (probs is now probability of being hard)
+    is_hard = probs >= optimal_threshold  # If P(hard) >= threshold → Hard
+    is_easy = ~is_hard                    # If P(hard) < threshold → Easy
+    
+    num_queries = len(probs)
+    num_easy = is_easy.sum()
+    num_hard = is_hard.sum()
+    
+    # Get hard query indices (for image matching)
     hard_query_indices = np.where(is_hard)[0]
     
     # Save outputs
@@ -297,17 +191,13 @@ def main(args):
     }
     
     if "labels" in features:
-        # Save labels in original index space
-        save_dict["labels"] = features["labels"].astype("float32")
-
-        # Compute accuracy on VALID rows only (NaN rows have no reliable prediction)
-        labels_valid = features["labels"][valid_mask].astype("float32")
-        is_easy_valid = is_easy[valid_mask]
+        save_dict["labels"] = features["labels"][valid_mask].astype("float32")
+        # Compute accuracy if labels available
         # labels: 1 = correct, 0 = wrong
         # is_easy: True = easy, False = hard
         # So: is_easy should match (labels == 1)
-        accuracy = (is_easy_valid.astype(int) == labels_valid).mean()
-        save_dict["accuracy_valid_only"] = float(accuracy)
+        accuracy = (is_easy.astype(int) == save_dict["labels"]).mean()
+        save_dict["accuracy"] = accuracy
     
     output_path = Path(args.output_path)
     np.savez_compressed(output_path, **save_dict)
@@ -325,37 +215,27 @@ def main(args):
     
     # Print summary
     print(f"\n{'='*70}")
-    if target_type == "easy_score":
-        print(f"Query Detection (BEFORE Image Matching) - LOGISTIC REGRESSION (EASY)")
-    else:
-        print(f"Query Detection (BEFORE Image Matching) - LOGISTIC REGRESSION (HARD)")
+    print(f"Query Detection (BEFORE Image Matching) - LOGISTIC REGRESSION (HARD)")
     print(f"{'='*70}")
     print(f"Processed {num_queries} queries using {len(feature_names)} retrieval features:")
     print(f"  - {', '.join(feature_names)}")
-    if target_type == "easy_score":
-        print(f"  - Model predicts: easy_score (probability of being easy/correct)")
-    else:
-        print(f"  - Model predicts: hard_score (probability of being hard/wrong)")
+    print(f"  - Model predicts: hard_score (probability of being hard/wrong)")
     print(f"  - Threshold: {optimal_threshold:.3f} ({threshold_source})")
     print(f"\nPredictions:")
-    if target_type == "easy_score":
-        print(f"  Easy (predicted P(easy) >= {optimal_threshold:.3f}, skip image matching): {num_easy} ({100*num_easy/num_queries:.1f}%)")
-        print(f"  Hard (predicted P(easy) < {optimal_threshold:.3f}, apply image matching): {num_hard} ({100*num_hard/num_queries:.1f}%)")
-    else:
-        print(f"  Hard (predicted P(hard) >= {optimal_threshold:.3f}, apply image matching): {num_hard} ({100*num_hard/num_queries:.1f}%)")
-        print(f"  Easy (predicted P(hard) < {optimal_threshold:.3f}, skip image matching): {num_easy} ({100*num_easy/num_queries:.1f}%)")
-    print(f"\nPredicted probability statistics (valid rows only):")
-    print(f"  Min: {np.nanmin(probs):.3f}, Max: {np.nanmax(probs):.3f}")
-    print(f"  Mean: {np.nanmean(probs):.3f}, Median: {np.nanmedian(probs):.3f}")
+    print(f"  Hard (predicted P(hard) >= {optimal_threshold:.3f}, apply image matching): {num_hard} ({100*num_hard/num_queries:.1f}%)")
+    print(f"  Easy (predicted P(hard) < {optimal_threshold:.3f}, skip image matching): {num_easy} ({100*num_easy/num_queries:.1f}%)")
+    print(f"\nPredicted probability statistics:")
+    print(f"  Min: {probs.min():.3f}, Max: {probs.max():.3f}")
+    print(f"  Mean: {probs.mean():.3f}, Median: {np.median(probs):.3f}")
     
     if "labels" in features:
-        actually_wrong = int((save_dict["labels"] == 0).sum())
-        actually_correct = int((save_dict["labels"] == 1).sum())
+        actually_wrong = (save_dict["labels"] == 0).sum()
+        actually_correct = (save_dict["labels"] == 1).sum()
         print(f"\nGround truth (if available):")
         print(f"  Actually wrong: {actually_wrong} ({100*actually_wrong/num_queries:.1f}%)")
         print(f"  Actually correct: {actually_correct} ({100*actually_correct/num_queries:.1f}%)")
-        if "accuracy_valid_only" in save_dict:
-            print(f"  Detection accuracy (valid rows only): {save_dict['accuracy_valid_only']*100:.1f}%")
+        if "accuracy" in save_dict:
+            print(f"  Detection accuracy: {save_dict['accuracy']*100:.1f}%")
 
 
 if __name__ == "__main__":
@@ -396,13 +276,6 @@ if __name__ == "__main__":
         type=float,
         default=None,
         help="Target hard query rate (0.0-1.0) for threshold calibration. E.g., 0.30 for 30%% hard queries",
-    )
-    parser.add_argument(
-        "--min-hard-rate",
-        type=float,
-        default=None,
-        help="Ensure at least this fraction of queries are marked HARD (0.0-1.0). "
-             "Useful when a saved validation threshold generalizes poorly and predicts 0%% hard queries.",
     )
     
     args = parser.parse_args()
