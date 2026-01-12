@@ -8,8 +8,8 @@ It will:
   - run adaptive evaluation on 4 test datasets
   - parse key metrics from stdout (threshold, %hard/%easy, Recall@1, runtime)
   - write:
-      1) summary.csv  (easy to copy into Excel)
-      2) summary.txt  (human-readable table)
+      1) summary.csv  
+      2) summary.txt  
       3) raw.log      (full stdout of all runs)
 
 Notes:

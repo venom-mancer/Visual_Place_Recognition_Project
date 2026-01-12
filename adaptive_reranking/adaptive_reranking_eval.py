@@ -1,5 +1,5 @@
 """
-Adaptive re-ranking with *adaptive matching* (Option B).
+Adaptive re-ranking with adaptive matching
 
 For each query (test time):
   1) Use existing matcher top-1 inliers + trained LR model to decide if the query is EASY or HARD.
@@ -7,7 +7,6 @@ For each query (test time):
   3) HARD  -> on-the-fly run the chosen matcher for top-K predictions, re-rank by inliers, then evaluate Recall@N.
 
 This script:
-  - Never overwrites your existing logs (top-1 inliers are read-only).
   - Computes Recall@N for the adaptive strategy.
   - Reports how many queries are EASY/HARD and how many extra LoFTR pairs were evaluated.
 """
